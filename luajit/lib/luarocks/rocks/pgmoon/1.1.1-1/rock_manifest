@@ -1,0 +1,13 @@
+rock_manifest = {
+   doc = {
+      ['README.md'] = "74ed208b5c7e9fc8cf1b6e09fdf74905"
+   },
+   lua = {
+      pgmoon = {
+         ['crypto.lua'] = "5a47c3b3e29dc1ed46eeaf2a735376fe",
+         ['init.lua'] = "92634e74d6fabd22264c3c97de0b1abf",
+         ['socket.lua'] = "6896510918158f655cd0c1a41cabe48c"
+      }
+   },
+   ['pgmoon-1.1.1-1.rockspec'] = "857fb6138fa187435f32f1d07208da07"
+}

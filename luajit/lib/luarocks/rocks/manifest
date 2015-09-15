@@ -1,0 +1,337 @@
+commands = {}
+dependencies = {
+   inspect = {
+      ['3.0-1'] = {
+         {
+            constraints = {
+               {
+                  op = ">=",
+                  version = {
+                     5, 1, string = "5.1"
+                  }
+               }
+            },
+            name = "lua"
+         }
+      }
+   },
+   luasec = {
+      ['0.5-2'] = {
+         {
+            constraints = {
+               {
+                  op = ">=",
+                  version = {
+                     5, 1, string = "5.1"
+                  }
+               }
+            },
+            name = "lua"
+         }, {
+            constraints = {},
+            name = "luasocket"
+         }
+      }
+   },
+   luasocket = {
+      ['3.0rc1-2'] = {
+         {
+            constraints = {
+               {
+                  op = ">=",
+                  version = {
+                     5, 1, string = "5.1"
+                  }
+               }
+            },
+            name = "lua"
+         }
+      }
+   },
+   luuid = {
+      ['20120501-1'] = {
+         {
+            constraints = {
+               {
+                  op = "~>",
+                  version = {
+                     5, 1, string = "5.1"
+                  }
+               }
+            },
+            name = "lua"
+         }
+      }
+   },
+   md5 = {
+      ['1.2-1'] = {
+         {
+            constraints = {
+               {
+                  op = ">=",
+                  version = {
+                     5, 0, string = "5.0"
+                  }
+               }
+            },
+            name = "lua"
+         }
+      }
+   },
+   mobdebug = {
+      ['0.55-1'] = {
+         {
+            constraints = {
+               {
+                  op = ">=",
+                  version = {
+                     5, 1, string = "5.1"
+                  }
+               }, {
+                  op = "<",
+                  version = {
+                     5, 3, string = "5.3"
+                  }
+               }
+            },
+            name = "lua"
+         }, {
+            constraints = {
+               {
+                  op = ">=",
+                  version = {
+                     2, 0, string = "2.0"
+                  }
+               }
+            },
+            name = "luasocket"
+         }
+      }
+   },
+   pgmoon = {
+      ['1.1.1-1'] = {
+         {
+            constraints = {
+               {
+                  op = ">=",
+                  version = {
+                     5, 1, string = "5.1"
+                  }
+               }
+            },
+            name = "lua"
+         }
+      }
+   },
+   stringdistance = {
+      ['1.1.0-1'] = {
+         {
+            constraints = {
+               {
+                  op = ">=",
+                  version = {
+                     5, 0, string = "5.0"
+                  }
+               }
+            },
+            name = "lua"
+         }
+      }
+   }
+}
+modules = {
+   des56 = {
+      "md5/1.2-1"
+   },
+   inspect = {
+      "inspect/3.0-1"
+   },
+   ltn12 = {
+      "luasocket/3.0rc1-2"
+   },
+   md5 = {
+      "md5/1.2-1"
+   },
+   ['md5.core'] = {
+      "md5/1.2-1"
+   },
+   mime = {
+      "luasocket/3.0rc1-2"
+   },
+   ['mime.core'] = {
+      "luasocket/3.0rc1-2"
+   },
+   mobdebug = {
+      "mobdebug/0.55-1"
+   },
+   pgmoon = {
+      "pgmoon/1.1.1-1"
+   },
+   ['pgmoon.crypto'] = {
+      "pgmoon/1.1.1-1"
+   },
+   ['pgmoon.socket'] = {
+      "pgmoon/1.1.1-1"
+   },
+   socket = {
+      "luasocket/3.0rc1-2"
+   },
+   ['socket.core'] = {
+      "luasocket/3.0rc1-2"
+   },
+   ['socket.ftp'] = {
+      "luasocket/3.0rc1-2"
+   },
+   ['socket.headers'] = {
+      "luasocket/3.0rc1-2"
+   },
+   ['socket.http'] = {
+      "luasocket/3.0rc1-2"
+   },
+   ['socket.serial'] = {
+      "luasocket/3.0rc1-2"
+   },
+   ['socket.smtp'] = {
+      "luasocket/3.0rc1-2"
+   },
+   ['socket.tp'] = {
+      "luasocket/3.0rc1-2"
+   },
+   ['socket.unix'] = {
+      "luasocket/3.0rc1-2"
+   },
+   ['socket.url'] = {
+      "luasocket/3.0rc1-2"
+   },
+   ssl = {
+      "luasec/0.5-2"
+   },
+   ['ssl.https'] = {
+      "luasec/0.5-2"
+   },
+   stringdistance = {
+      "stringdistance/1.1.0-1"
+   },
+   uuid = {
+      "luuid/20120501-1"
+   }
+}
+repository = {
+   inspect = {
+      ['3.0-1'] = {
+         {
+            arch = "installed",
+            commands = {},
+            dependencies = {},
+            modules = {
+               inspect = "inspect.lua"
+            }
+         }
+      }
+   },
+   luasec = {
+      ['0.5-2'] = {
+         {
+            arch = "installed",
+            commands = {},
+            dependencies = {
+               luasocket = "3.0rc1-2"
+            },
+            modules = {
+               ssl = "ssl.lua",
+               ['ssl.https'] = "ssl/https.lua"
+            }
+         }
+      }
+   },
+   luasocket = {
+      ['3.0rc1-2'] = {
+         {
+            arch = "installed",
+            commands = {},
+            dependencies = {},
+            modules = {
+               ltn12 = "ltn12.lua",
+               mime = "mime.lua",
+               ['mime.core'] = "mime/core.so",
+               socket = "socket.lua",
+               ['socket.core'] = "socket/core.so",
+               ['socket.ftp'] = "socket/ftp.lua",
+               ['socket.headers'] = "socket/headers.lua",
+               ['socket.http'] = "socket/http.lua",
+               ['socket.serial'] = "socket/serial.so",
+               ['socket.smtp'] = "socket/smtp.lua",
+               ['socket.tp'] = "socket/tp.lua",
+               ['socket.unix'] = "socket/unix.so",
+               ['socket.url'] = "socket/url.lua"
+            }
+         }
+      }
+   },
+   luuid = {
+      ['20120501-1'] = {
+         {
+            arch = "installed",
+            commands = {},
+            dependencies = {},
+            modules = {
+               uuid = "uuid.so"
+            }
+         }
+      }
+   },
+   md5 = {
+      ['1.2-1'] = {
+         {
+            arch = "installed",
+            commands = {},
+            dependencies = {},
+            modules = {
+               des56 = "des56.so",
+               md5 = "md5.lua",
+               ['md5.core'] = "md5/core.so"
+            }
+         }
+      }
+   },
+   mobdebug = {
+      ['0.55-1'] = {
+         {
+            arch = "installed",
+            commands = {},
+            dependencies = {
+               luasocket = "3.0rc1-2"
+            },
+            modules = {
+               mobdebug = "mobdebug.lua"
+            }
+         }
+      }
+   },
+   pgmoon = {
+      ['1.1.1-1'] = {
+         {
+            arch = "installed",
+            commands = {},
+            dependencies = {},
+            modules = {
+               pgmoon = "pgmoon/init.lua",
+               ['pgmoon.crypto'] = "pgmoon/crypto.lua",
+               ['pgmoon.socket'] = "pgmoon/socket.lua"
+            }
+         }
+      }
+   },
+   stringdistance = {
+      ['1.1.0-1'] = {
+         {
+            arch = "installed",
+            commands = {},
+            dependencies = {},
+            modules = {
+               stringdistance = "stringdistance.so"
+            }
+         }
+      }
+   }
+}

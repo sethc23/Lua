@@ -1,0 +1,6 @@
+*.h
+*.so
+*.so.*
+luajit/bin/
+*.a
+*.pc

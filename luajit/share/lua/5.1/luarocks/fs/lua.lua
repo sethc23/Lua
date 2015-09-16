@@ -207,8 +207,13 @@ end
 -- Allows leaving a directory (e.g. for deleting it) in
 -- a crossplatform way.
 function fs_lua.change_dir_to_root()
-   table.insert(dir_stack, lfs.currentdir())
+   local current = lfs.currentdir()
+   if not current or current == "" then
+      return false
+   end
+   table.insert(dir_stack, current)
    lfs.chdir("/") -- works on Windows too
+   return true
 end
 
 --- Change working directory to the previous in the dir stack.
@@ -732,7 +737,7 @@ function fs_lua.chmod(file, mode)
    -- LuaPosix (as of 5.1.15) does not support octal notation...
    if mode:sub(1,1) == "0" then
       local new_mode = {}
-      for c in mode:sub(2):gmatch(".") do
+      for c in mode:sub(-3):gmatch(".") do
          table.insert(new_mode, octal_to_rwx[c])
       end
       mode = table.concat(new_mode)

@@ -4,7 +4,7 @@ rock_manifest = {
       ['README.win32'] = "414a8a3f26202756212e48074d0eecc9"
    },
    lib = {
-      ['uuid.so'] = "cb8c10955420a061bd18ea0538f9eeb7"
+      ['uuid.so'] = "f18f814f86418072eb65ae0cdfdff7b3"
    },
    ['luuid-20120501-1.rockspec'] = "03879413a9d6116dc7fe219c8f216f04"
 }

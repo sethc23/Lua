@@ -1,0 +1,96 @@
+rock_manifest = {
+   bin = {
+      luarocks = "6355e0072f23f5fc27c086749f4d004c",
+      ["luarocks-5.1"] = "6355e0072f23f5fc27c086749f4d004c",
+      ["luarocks-admin"] = "3330567f6c84be50571d5e1b7d2cc725",
+      ["luarocks-admin-5.1"] = "3330567f6c84be50571d5e1b7d2cc725"
+   },
+   doc = {
+      COPYING = "21cc02223d633a3e8d629b0f1b1d468b",
+      ["README.md"] = "b45b4259fe37b51bc9b75f01d8737015"
+   },
+   lua = {
+      luarocks = {
+         ["add.lua"] = "b433131a5de8caa76698fb8cf260e27b",
+         ["admin_remove.lua"] = "ae50d859ab2aad02ea7b8a274bed20a9",
+         build = {
+            ["builtin.lua"] = "9f776100a78c369639a7ecd11fa99faf",
+            ["cmake.lua"] = "37299577edc1602ea45e365c9c920314",
+            ["command.lua"] = "557637271099adfb74d55ab4b0773f43",
+            ["make.lua"] = "0ff04e1300e8f8911de32136c4417a61"
+         },
+         ["build.lua"] = "a31598b007c8144e6fb61a6950c639b5",
+         ["cache.lua"] = "bd102de40e308926b97bf5057aa71ced",
+         ["cfg.lua"] = "ea912edf5ca27c5861239647efc45cc9",
+         ["command_line.lua"] = "729ea19581aec10df68a7386c89c28ac",
+         ["deps.lua"] = "a3634dc3e3df0db127b623a86f3e3ae0",
+         ["dir.lua"] = "06a1736efcd8d2badcf87c3a435a51ad",
+         ["doc.lua"] = "1206e6295c4098e87309b66929622193",
+         ["download.lua"] = "3cba6f73b592604b942bbe0a3b35a75f",
+         fetch = {
+            ["cvs.lua"] = "a553135c89cf6605fc0c2f7c991f8cb5",
+            ["git.lua"] = "0babde3ff9a4f33228282c682ba0618b",
+            ["git_file.lua"] = "8f8f00000ad536eb192410f6d8c43bc9",
+            ["git_http.lua"] = "1a80e9136a9fe93b79e7033aaa4e7542",
+            ["git_https.lua"] = "c2aa9c8224c18131cc3b0c03adebe4b0",
+            ["hg.lua"] = "d002ed5c96a1982738e7d49714370095",
+            ["hg_http.lua"] = "75775710a52ece59d59a0926e945253d",
+            ["hg_https.lua"] = "a91b65bab8bc662cd05cd24b1838c55b",
+            ["hg_ssh.lua"] = "fc12513879c7f4b90f78d60fc0dc47c7",
+            ["sscm.lua"] = "d932c66fff59e2aba656b5386dfb3607",
+            ["svn.lua"] = "8cee297dfcfbc29eed9f06b781e7ba01"
+         },
+         ["fetch.lua"] = "bbd82c3ee16c1af6df7cda8d1dd77dcb",
+         fs = {
+            ["lua.lua"] = "4bec24b0541c0156d2d55fa09f10cb13",
+            unix = {
+               ["tools.lua"] = "f043c4aa763ef6acf1164cca7fe37095"
+            },
+            ["unix.lua"] = "7378eb1cda509d227024d1093d3818c4",
+            win32 = {
+               ["tools.lua"] = "4ffa66cccca3b92d3c9d58650b7e7b55"
+            },
+            ["win32.lua"] = "3b714b672ab83d66b0d93f027fa24e14"
+         },
+         ["fs.lua"] = "3c0502bf485f57947d1cf67f7e2746d4",
+         ["help.lua"] = "679867de99369eb451cf021e71d80866",
+         ["index.lua"] = "97284b6d61ccd050131702f8568432d6",
+         ["install.lua"] = "746e6c3018a8ec8cb93378450ab9827c",
+         ["lint.lua"] = "b2ce04aae3b80bb3732be4c26f276256",
+         ["list.lua"] = "34d19bf7dfe6ba7bfbb1642532e3cda9",
+         ["loader.lua"] = "9fa3eb0a06f2c7566bd0a376ddcd7f6d",
+         ["make.lua"] = "127f5a8d9dc06c7280d5c678fefaec99",
+         ["make_manifest.lua"] = "ee1b4c2bc7250ca0187bbe61a82f3472",
+         ["manif.lua"] = "442e2138fed32ab45f33a9406f2565ae",
+         ["manif_core.lua"] = "c5dfdd78ae61ad56b132169fffbda767",
+         ["new_version.lua"] = "3a8fcf6416233256393a8d345272422f",
+         ["pack.lua"] = "a2b2c452f74b0812212ec37efc760896",
+         ["path.lua"] = "ebbe8e66c72698ae8179782e31874024",
+         ["path_cmd.lua"] = "b34f433fe0ed64e1f206cd4a0269c15b",
+         ["persist.lua"] = "0fe76fb856f859c436506814db6d4772",
+         ["purge.lua"] = "8235bc708375020ab9cdccb1d97bb90a",
+         ["refresh_cache.lua"] = "2ffc5107012cc85b431dffe70277a2fa",
+         ["remove.lua"] = "a7003e7f5823b4f22ec64b0ffc1688e0",
+         ["repos.lua"] = "8366e9aca46f23633a624a3b67a24298",
+         ["require.lua"] = "ec995c8651929e0b3e25084385910ee3",
+         ["search.lua"] = "c820367324c698e9444c0d06ff275014",
+         ["show.lua"] = "08ba61982961b2f442a1daa2d0419b62",
+         tools = {
+            ["patch.lua"] = "b71e0d80c717b76235b03c6cb7a35353",
+            ["tar.lua"] = "939d71cf0ae5b567b4aa228ca48ba19e",
+            ["zip.lua"] = "e027b56f330ec0c8405a01c819c02c1f"
+         },
+         ["type_check.lua"] = "e6c02bf943415513dcd0e026e80116a3",
+         ["unpack.lua"] = "9ae18eb881cefde595d74f418194edd3",
+         upload = {
+            ["api.lua"] = "25f760e362a9924be668416ed75b3f9e",
+            ["multipart.lua"] = "17a579f45de1642a8b995f2d40dcd790"
+         },
+         ["upload.lua"] = "ef744fb15e9742106dfd86806af9ad8f",
+         ["util.lua"] = "0c19437e1feb6792b4a78cda5188b99f",
+         ["validate.lua"] = "8bf2f53e1c8bc07fa80ed193b74dade2",
+         ["write_rockspec.lua"] = "1847a4712492e244837197d02f562caa"
+      }
+   },
+   ["luarocks-2.2.2-1.rockspec"] = "8dd1d49a31d8fe89b860f44231dfb385"
+}

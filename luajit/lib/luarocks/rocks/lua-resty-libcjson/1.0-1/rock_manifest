@@ -1,0 +1,12 @@
+rock_manifest = {
+   doc = {
+      LICENSE = "bce4e52a292e3f955fe638136765bc0a",
+      ["README.md"] = "bd654fcb3a399da2e5811419311690c1"
+   },
+   lua = {
+      resty = {
+         ["libcjson.lua"] = "a468336653945c4e27499bce91595613"
+      }
+   },
+   ["lua-resty-libcjson-1.0-1.rockspec"] = "c7eea9b7128ab1ef55b841eba1307ff0"
+}

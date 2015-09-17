@@ -5,6 +5,9 @@ commands = {
    lua2json = {
       "lua-cjson/2.1.0-1"
    },
+   luap = {
+      "luaprompt/0.6-1"
+   },
    luarocks = {
       "luarocks/2.2.2-1"
    },
@@ -19,6 +22,26 @@ commands = {
    }
 }
 dependencies = {
+   argparse = {
+      ["0.4.1-1"] = {
+         {
+            constraints = {
+               {
+                  op = ">=",
+                  version = {
+                     5, 1, string = "5.1"
+                  }
+               }, {
+                  op = "<",
+                  version = {
+                     5, 4, string = "5.4"
+                  }
+               }
+            },
+            name = "lua"
+         }
+      }
+   },
    inspect = {
       ["3.0-1"] = {
          {
@@ -91,6 +114,24 @@ dependencies = {
                }
             },
             name = "lua"
+         }
+      }
+   },
+   luaprompt = {
+      ["0.6-1"] = {
+         {
+            constraints = {
+               {
+                  op = ">=",
+                  version = {
+                     5, 1, string = "5.1"
+                  }
+               }
+            },
+            name = "lua"
+         }, {
+            constraints = {},
+            name = "argparse"
          }
       }
    },
@@ -234,6 +275,9 @@ dependencies = {
    }
 }
 modules = {
+   argparse = {
+      "argparse/0.4.1-1"
+   },
    cjson = {
       "lua-cjson/2.1.0-1"
    },
@@ -480,6 +524,9 @@ modules = {
    ["pgmoon.socket"] = {
       "pgmoon/1.1.1-1"
    },
+   prompt = {
+      "luaprompt/0.6-1"
+   },
    re = {
       "lpeg/0.12.2-1"
    },
@@ -530,6 +577,18 @@ modules = {
    }
 }
 repository = {
+   argparse = {
+      ["0.4.1-1"] = {
+         {
+            arch = "installed",
+            commands = {},
+            dependencies = {},
+            modules = {
+               argparse = "argparse.lua"
+            }
+         }
+      }
+   },
    inspect = {
       ["3.0-1"] = {
          {
@@ -593,6 +652,22 @@ repository = {
             dependencies = {},
             modules = {
                lfs = "lfs.so"
+            }
+         }
+      }
+   },
+   luaprompt = {
+      ["0.6-1"] = {
+         {
+            arch = "installed",
+            commands = {
+               luap = "luap"
+            },
+            dependencies = {
+               argparse = "0.4.1-1"
+            },
+            modules = {
+               prompt = "prompt.so"
             }
          }
       }

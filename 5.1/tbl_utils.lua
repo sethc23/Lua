@@ -3,6 +3,7 @@
 -- Date: 9/17/15
 -- Time: 10:19 AM
 --
+--module("tbl_utils", package.seeall)
 
 local _tbl = {}
 
@@ -40,6 +41,32 @@ function _tbl.tostring( tbl )
     end
   end
   return "{" .. table.concat( result, "," ) .. "}"
+end
+
+function _tbl.table_invert(t)
+  local u = { }
+  for k, v in pairs(t) do u[v] = k end
+  return u
+end
+
+function _tbl.index(tbl_in,_var)
+    local t = {}
+    t = _tbl.table_invert(tbl_in)
+    local cnt = 1
+    for k,v in pairs(t) do
+        if v==_var then return cnt
+        else cnt = cnt + 1 end
+    end
+    return nil
+end
+
+function _tbl.count(t,_var)
+    local t,cnt = {},0
+    t = _tbl.table_invert(tbl_in)
+    for i,v in ipairs(t) do
+        if v==_var then cnt = cnt + 1 end
+    end
+    return cnt
 end
 
 return _tbl

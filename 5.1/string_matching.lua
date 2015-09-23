@@ -3,52 +3,38 @@
 -- Date: 9/16/15
 -- Time: 10:05 PM
 --
+--module("string_matching", package.seeall)
+package.loaded.string_matching = nil
+package.loaded.utility = nil
 
-local _res = {}
+local util = require "utility"
+to_log = util.to_log
+-- _debug = util.debug
+round = util.round
+cjson_encode = util.cjson_encode --only produces output when verbose=true
+cj = require "cjson"
 
-function round(n)
-    return math.floor((math.floor(n*2) + 1)/2)
-end
+local u = {}
 
-function cjson_encode(tbl, verbose)
-    local res
-    if verbose then
-        local cjson         =   require "cjson"
-        res                 =   cjson.encode(tbl)
-    else
-        res                 =   " "
-    end
-    return res
-end
+function u.jaro_score(s1,s2,winklerize,long_tolerance,verbose)
+    local log_to_file           =   false
+    -- _debug(                         {msg={"NEW JARO SCORE\\n\\n"},verbose=verbose,to_file=log_to_file})
 
-function to_log(msg, verbose)
-    if verbose then             
-        local t = ""
-        for i,v in ipairs(msg) do
-            if v then t = t..v end
-        end
-        log(t) 
-    end
-end
-
-function _res.jaro_score(s1,s2,winklerize,long_tolerance,verbose)
-    to_log(                         {"NEW EXECUTION\\n\\n"}, verbose)
-
-    if #s1==0 or #s2==0 then
-        log(                        "s1 or s2 has no length!")
-    end
+    --if #s1==0 or #s2==0 then
+    --    _debug(                     {msg={"s1 or s2 has no length!"},verbose=verbose,to_file=log_to_file})
+    --end
 
     -- set #a>#b
-    local a,b,m                 =   "","",0
+    local a,b                 =   "",""
     if #s1<#s2 then     b,a     =   s1,s2
     else                a,b     =   s1,s2   end
     a,b                         =   a:upper(),b:upper()
-    to_log(                         {"a: ",a}, verbose)
+    -- _debug(                         {msg={"a: ",a}, verbose=verbose, to_file=log_to_file})
 
     -- define max distance where character will be considered matching (despite tranposition)
     local match_dist            =   round( (#a/2) - 1 )
     if match_dist<0 then            match_dist=0 end
-    to_log(                         {"match_dist=",match_dist}, verbose)
+    -- _debug(                         {msg={"match_dist=",match_dist}, verbose=verbose, to_file=log_to_file})
 
     -- create letter and flags tables
     local a_tbl,b_tbl           =   {},{}
@@ -58,15 +44,15 @@ function _res.jaro_score(s1,s2,winklerize,long_tolerance,verbose)
         table.insert(               a_flags,false)
 
         table.insert(               b_tbl,b:sub(i,i))
-        table.insert(               b_flags,dfalse)
+        table.insert(               b_flags,false)
     end
     for i=#a+1, #b do
         table.insert(               b_tbl,b:sub(i,i))
         table.insert(               b_flags,false)
     end
-    to_log(                         {"a_tbl ",cjson_encode(a_tbl)}, verbose)
-    to_log(                         {"b_tbl ",cjson_encode(b_tbl)}, verbose)
-    to_log(                         {"b_tbl[3] ",b_tbl[3]}, verbose)
+    -- _debug(                         {msg={"a_tbl ",cjson_encode(a_tbl)}, verbose=verbose, to_file=log_to_file})
+    -- _debug(                         {msg={"b_tbl ",cjson_encode(b_tbl)}, verbose=verbose, to_file=log_to_file})
+    -- _debug(                         {msg={"b_tbl[3] ",b_tbl[3]}, verbose=verbose, to_file=log_to_file})
 
     -- verify tables are proper length
     if (not #a==#a_tbl==#a_flags) or (not #b==#b_tbl==#b_flags) then
@@ -80,7 +66,7 @@ function _res.jaro_score(s1,s2,winklerize,long_tolerance,verbose)
         i = _i-1
 
         local cursor            =   v
-        to_log(                     {"cursor_1=",cursor}, verbose)
+        -- _debug(                     {msg={"cursor_1=",cursor}, verbose=verbose, to_file=log_to_file})
 
         if i>match_dist then
             low                 =   i-match_dist
@@ -93,17 +79,17 @@ function _res.jaro_score(s1,s2,winklerize,long_tolerance,verbose)
             hi                  =   #b
         end
 
-        to_log(                     {"low_hi ",low," ",hi}, verbose)
+        -- _debug(                     {msg={"low_hi ",low," ",hi}, verbose=verbose, to_file=log_to_file})
 
         for _j=low+1, hi+1 do
             j                   =   _j-1
 
-            to_log(                 {"ij ",i," ",j}, verbose)
-            to_log(                 {"cursor ",cursor}, verbose)
-            to_log(                 {{"b_tbl[j+1] "},b_tbl[j+1]}, verbose)
+            -- _debug(                 {msg={"ij ",i," ",j}, verbose=verbose, to_file=log_to_file})
+            -- _debug(                 {msg={"cursor ",cursor}, verbose=verbose, to_file=log_to_file})
+            -- _debug(                 {msg={{"b_tbl[j+1] "},b_tbl[j+1]}, verbose=verbose, to_file=log_to_file})
 
             if not b_flags[j+1] and b_tbl[j+1]==cursor then
-                to_log(             {"BREAK_HERE"}, verbose)
+                -- _debug(             {msg={"BREAK_HERE"}, verbose=verbose, to_file=log_to_file})
                 a_flags[i+1]    =   true
                 b_flags[j+1]    =   true
                 common          =   common+1
@@ -111,17 +97,17 @@ function _res.jaro_score(s1,s2,winklerize,long_tolerance,verbose)
             end
         end
     end
-    to_log(                         {"a_flags=",cjson_encode(a_flags)}, verbose)
-    to_log(                         {"b_flags=",cjson_encode(b_flags)}, verbose)
+    -- _debug(                         {msg={"a_flags=",cjson_encode(a_flags)}, verbose=verbose, to_file=log_to_file})
+    -- _debug(                         {msg={"b_flags=",cjson_encode(b_flags)}, verbose=verbose, to_file=log_to_file})
 
     -- return nil if no exact or transpositional matches
     if common==0 then               return nil end
-    to_log(                         {"common = ",common}, verbose)
+    -- _debug(                         {msg={"common = ",common}, verbose=verbose, to_file=log_to_file})
 
     -- count transpositions
     local first,k,trans_count   =   true,1,0
     local _j
-    for _i,v in ipairs(a_tbl) do
+    for _i,_ in ipairs(a_tbl) do
         i                       =   _i - 1
 
         if a_flags[i+1] then
@@ -129,8 +115,8 @@ function _res.jaro_score(s1,s2,winklerize,long_tolerance,verbose)
             for j=k, #b do
                 _j              =   j - 1
 
-                to_log(            {"i},j,_j= ",i,",",j,",",_j}, verbose)
-                to_log(            {"b_flags[j]= ",cjson_encode({b_flags[j]})}, verbose)
+                -- _debug(            {msg={"i},j,_j= ",i,",",j,",",_j}, verbose=verbose, to_file=log_to_file})
+                -- _debug(            {msg={"b_flags[j]= ",cjson_encode({b_flags[j]})}, verbose=verbose, to_file=log_to_file})
 
                 if b_flags[j] then
                     k           =   j+1
@@ -138,8 +124,8 @@ function _res.jaro_score(s1,s2,winklerize,long_tolerance,verbose)
                 end
             end
 
-            to_log(                 {"k= ",k}, verbose)
-            to_log(                 {"a_tbl[i+1]= ",a_tbl[i+1]}, verbose)
+            -- _debug(                 {msg={"k= ",k}, verbose=verbose, to_file=log_to_file})
+            -- _debug(                 {msg={"a_tbl[i+1]= ",a_tbl[i+1]}, verbose=verbose, to_file=log_to_file})
 
             if not j and first then
                 _j,first        =   1,false
@@ -147,7 +133,7 @@ function _res.jaro_score(s1,s2,winklerize,long_tolerance,verbose)
                 _j              =   _j + 1
             end
 
-            to_log(                 {"b_tbl[_j]= ",b_tbl[_j]}, verbose)
+            -- _debug(                 {msg={"b_tbl[_j]= ",b_tbl[_j]}, verbose=verbose, to_file=log_to_file})
             if a_tbl[i+1]~=b_tbl[_j] then
                 if (not trans_count or trans_count==0) then
                     trans_count =   1
@@ -159,40 +145,40 @@ function _res.jaro_score(s1,s2,winklerize,long_tolerance,verbose)
         end
     end
     trans_count                 =   trans_count/2
-    to_log(                         {"trans_count = ",trans_count}, verbose)
+    -- _debug(                         {msg={"trans_count = ",trans_count}, verbose=verbose, to_file=log_to_file})
 
     -- adjust for similarities in nonmatched characters
     local weight                =   0
     weight                      =   ( ( common/#a + common/#b +
                                         (common-trans_count)/common ) )/3
-    to_log(                         {"weight = ",weight}, verbose)
+    -- _debug(                         {msg={"weight = ",weight}, verbose=verbose, to_file=log_to_file})
 
     -- winkler modification: continue to boost if strings are similar
-    local i,_i,j                =   0,0,0
+    local _i                    =   0
     if winklerize and weight>0.7 and #a>3 and #b>3 then
 
         -- adjust for up to first 4 chars in common
 
         if #a<4 then                j = #a
         else                        j = 4 end
-        to_log(                     {"i},j_1= ",i,",",j}, verbose)
+        -- _debug(                     {msg={"i},j_1= ",i,",",j}, verbose=verbose, to_file=log_to_file})
 
         for _i=1, j-1 do
             if _i==1 then           i = _i-1 end
             if a_tbl[_i]==b_tbl[_i] and #b>=_i then
                 if not i then       i = 1
                 else                i = i+1 end
-                to_log(             {"i},_i,j_2= ",i,",",_i,",",j}, verbose)
+                -- _debug(             {msg={"i},_i,j_2= ",i,",",_i,",",j}, verbose=verbose, to_file=log_to_file})
             end
             if i>j then             break end
         end
-        to_log(                     {"i},_i,j_3= ",i,",",_i,",",j}, verbose)
+        -- _debug(                     {msg={"i},_i,j_3= ",i,",",_i,",",j}, verbose=verbose, to_file=log_to_file})
 
         if i-1>0 then
             i = i-1
             weight              =   weight + ( i * 0.1 * (1.0 - weight) )
         end
-        to_log(                     {"new weight_1 = ",weight}, verbose)
+        -- _debug(                     {msg={"new weight_1 = ",weight}, verbose=verbose, to_file=log_to_file})
 
         -- optionally adjust for long strings
         -- after agreeing beginning chars, at least two or more must agree and
@@ -204,7 +190,7 @@ function _res.jaro_score(s1,s2,winklerize,long_tolerance,verbose)
             weight              =   weight + ((1.0 - weight) * ( (common-i-1) / (#a+#b-i*2+2)))
         end
 
-        to_log(                     {"new weight_2 = ",weight}, verbose)
+        -- _debug(                     {msg={"new weight_2 = ",weight}, verbose=verbose, to_file=log_to_file})
 
     end
 
@@ -212,165 +198,276 @@ function _res.jaro_score(s1,s2,winklerize,long_tolerance,verbose)
 
 end
 
+function u.perm_jaro(t)
 
-function _res.iter_jaro(qry)
-
-
-    --end
-    --do
---    package.loaded.string_matching = nil
---    package.loaded.cjson = nil
---    package.loaded.tbl_utils = nil
-
-    local m_str = require "string_matching"
-    local cj = require "cjson"
-    local tbl = require "tbl_utils"
-    --
-    _U = {}
-    --    z_string_matching = coroutine.wrap( z_string_matching )
-
-
-    function update_jaro_score(row,res_tbl)
-        local s1, s2, a_idx, b_idx, j_score
-        s1,s2 = row.a_str, row.b_str
-        a_idx,b_idx = row.a_idx, row.b_idx
-        j_score = m_str.jaro_score(s1, s2, false, false, false)
-
-        --os.execute("echo 'a_idx: "..a_idx.."' >> /tmp/tmpfile")
-
-        if not res_tbl[a_idx] or j_score>=res_tbl[a_idx].jaro_score then
-
-            if res_tbl[a_idx] and j_score==res_tbl[a_idx].jaro_score then
-                res_tbl[a_idx].other_matches = cj.encode({res_tbl[a_idx].other_matches,b_idx})
-
+    function get_div_tbl_from_str (t)
+        local div_str,sep_mark
+        if type(t)=="string" then div_str,sep_mark=t,";"
+        else setmetatable(t,{__index={div_str=t[1], sep_mark=t[2] or ";"}}) end
+        local div,sep_tbl = "",{}
+        for _sep in div_str:gmatch(".") do
+            if _sep==sep_mark then
+                if div=="" then
+                    table.insert(sep_tbl,1+#sep_tbl,sep_mark)
+                else
+                    table.insert(sep_tbl,1+#sep_tbl,div)
+                    div=""
+                end
             else
-                if not res_tbl[a_idx] then res_tbl[a_idx] = {} end
-                res_tbl[a_idx].a_idx = a_idx
-                res_tbl[a_idx].a_str = s1
-                res_tbl[a_idx].jaro_score = j_score
-                res_tbl[a_idx].other_matches = {}
-                res_tbl[a_idx].b_str = s2
-                res_tbl[a_idx].b_idx = b_idx
+                div = div.._sep
+            end
+        end
+        if div~="" then table.insert(sep_tbl,1+#sep_tbl,div) end
+        return  sep_tbl
+    end
+
+    function split_str_with_div (str,div)
+
+        local str_parts = {}
+        local i,next_match = 1,0,0
+        while true do
+            next_match = str:find(div,i,true)
+            if not next_match then
+                if not str_parts then
+                    table.insert(str_parts,1+#str_parts,str)
+                else
+                    table.insert(str_parts,1+#str_parts,str:sub(i))
+                end
+                break
+            else
+                table.insert(str_parts,1+#str_parts,str:sub(i,next_match-1))
+                i = next_match + #div
+            end
+            if i>=#str then break end
+        end
+        return str_parts
+
+    end
+
+    function split_str_with_div_tbl (str,div_tbl)
+
+        local str_parts = {str}
+        local cnt_a,cnt_b=1,1
+        while true do
+
+            cnt_a = #str_parts
+
+            local new_str_parts = {}
+            for i,v in ipairs(str_parts) do
+                table.insert(new_str_parts,i,v)
             end
 
-        end
+            for i,_part in ipairs(new_str_parts) do
 
-        return res_tbl
-    end
+                local cnt = 0
+                local split_parts
+                for _,div in ipairs(div_tbl) do
+                    split_parts = split_str_with_div(_part,div)
+                    if #split_parts>1 then
+                        break
+                    else
+                        cnt = cnt + 1
+                    end
+                end
+                if cnt~=#div_tbl then
 
-    function process_rows()
-        os.execute("echo 'processing' >> /tmp/tmpfile")
-        local cnt = 0
-        for r in _U.qry:rows{qry,_U.offset,_U.limit} do
-            _U.results = update_jaro_score(r,_U.results)
+                    for j=1,#split_parts do
+                        table.insert(str_parts,i-1+j,split_parts[j])
+                    end
+                    table.remove(str_parts,i+#split_parts)
+                    break
 
-            os.execute("echo '_U.results: "..tbl.tostring( _U.results ).."' >> /tmp/tmpfile")
-            --os.execute("echo '_U: "..table.tostring( _U ).."' >> /tmp/tmpfile")
-            --if true then return _U.results end
-
-            cnt = cnt + 1
-        end
-
-        _U.offset = _U.offset + _U.limit
-
-        if cnt==_U.limit then
-            _U.offset = _U.offset + _U.limit
-            _U.results = process_rows()
-        else
-            return _U.results
-        end
-    end
-
-    if not _U.qry then
-        --os.execute("echo 'TEST' >> /tmp/tmpfile")
-        local _qry = [[  select pllua_f1.* from ( ]]..qry..[[ ) pllua_f1
-                         order by pllua_f1.a_idx asc,pllua_f1.b_idx asc
-                         OFFSET $2 LIMIT $3; ]]
-        --os.execute("echo '".._qry.."' >> /tmp/tmpfile")
-        _U.qry = server.prepare(_qry, {"text","int4","int4"}):save()
-        _U.offset,_U.limit = 0,1000
-        _U.results = {}
-    end
-
-
-    _U.results = process_rows(qry)
-
-    os.execute("echo '\\n\\nFINAL RESULT: "..tbl.tostring(_U.results).."\\n\\n' >> /tmp/tmpfile")
-
-    for _,v in pairs(_U.results) do
-        os.execute("echo 'v.a_idx : \""..v.a_idx.."\"' >> /tmp/tmpfile")
-        os.execute("echo 'v.a_str : \""..v.a_str.."\"' >> /tmp/tmpfile")
-        os.execute("echo 'v.jaro_score : \""..v.jaro_score.."\"' >> /tmp/tmpfile")
-        os.execute("echo 'v.b_str : \""..v.b_str.."\"' >> /tmp/tmpfile")
-        os.execute("echo 'v.b_idx : \""..v.b_idx.."\"' >> /tmp/tmpfile")
-        os.execute("echo 'v.other_matches : \""..cj.encode(v.other_matches).."\"' >> /tmp/tmpfile")
-        coroutine.yield{ a_idx=tostring(v.a_idx), a_str=v.a_str, jaro_score=tostring(v.jaro_score), b_str=v.b_str, b_idx=tostring(v.b_idx), other_matches=cj.encode(v.other_matches) }
-        --coroutine.yield( v.a_idx, v.a_str, v.jaro_score, v.b_str, v.b_idx, cj.encode(v.other_matches) )
-    end
-
-
-    --for _,v in ipairs(_U.results) do
-    --z=cj.encode(v)
-    --v=z
-    --os.execute("echo 'v.a_idx : "..v.a_idx.."' >> /tmp/tmpfile")
-    --local t = {a_idx=v.a_idx,a_str=v.a_str,jaro_score=v.jaro_score,
-    --                    b_str=v.b_str,b_idx=v.b_idx,other_matches=v.other_matches}
-       --os.execute("echo 't : "..cj.encode(t).."' >> /tmp/tmpfile")
-       --os.execute("echo 't.a_str : "..t.a_str.."' >> /tmp/tmpfile")
-       --os.execute("echo 'v : "..cj.encode(v).."' >> /tmp/tmpfile")
-       --os.execute("echo 'v.a_str : "..v.a_str.."' >> /tmp/tmpfile")
-    --    coroutine.yield{a_idx=v.a_idx, a_str=v.a_str, jaro_score=v.jaro_score, b_str=v.b_str, b_idx=v.b_idx, other_matches=v.other_matches}
-    --end
-
-
-    --local res = ""
-    --res = cj.encode(table.tostring( _U.results ))
-
-    --os.execute("echo 'DONE' >> /tmp/tmpfile")
-    --os.execute("echo 'showing all: "..res.."' >> /tmp/tmpfile")
-    --local t = {}
-    --local x = {}
-    --res = _U.results
-    function send_results(res)
-        os.execute("echo '_U.results: "..table.tostring(_U.results).."' >> /tmp/tmpfile")
-        local res_order = {"a_idx","a_str","jaro_score","b_str","b_idx","other_matches"}
-        for k,v in pairs(res) do
-            os.execute("echo '\\nres[k]: "..cj.encode(res[k]).."' >> /tmp/tmpfile")
-            --os.execute("echo '\\nv: "..cj.encode(v).."' >> /tmp/tmpfile")
-            if res[k] then
-
-                for _,_v in ipairs(res_order) do
-                    os.execute("echo '\\nv[_v]: "..cj.encode(v[_v]).."' >> /tmp/tmpfile")
-                    t[_v]=v[_v]
-                    os.execute("echo '\\nx1: "..table.tostring(x).."' >> /tmp/tmpfile")
-                    x = table.insert(x,tostring(v[_v]))
-                    os.execute("echo '\\nx2: "..table.tostring(x).."' >> /tmp/tmpfile")
                 end
 
-                os.execute("echo '\\nreturning: "..x.."' >> /tmp/tmpfile")
-                --coroutine.yield(x)
-                --coroutine.yield(t)
-                --os.execute("echo 'STILL GOING' >> /tmp/tmpfile")
             end
+
+            cnt_b = #str_parts
+
+            if cnt_a==cnt_b then break end
+
         end
+
+        return str_parts
+
     end
 
-    --send_results(res)
+--    package.loaded.mobdebug = nil
+--    require('mobdebug').start("10.0.1.53")
 
-    --return _U.results
+--    assert(type(t)~="table",[[
+--        Expected table as first argument, e.g.,
+--            ( div_str, { jaro_score vars } )
+--        Use ';;' for ';' splitter.
+--        Default is ' ;_;/;\;|;&'
+--    ]])
 
-    --local tmp = {}
-    --tmp["a_idx"] = _U.results[1527].a_idx
-    --tmp["a_str"] = _U.results[1527].a_str
-    --tmp["jaro_score"] = _U.results[1527].jaro_score
-    --tmp["b_str"] = _U.results[1527].b_str
-    --tmp["b_idx"] = _U.results[1527].b_idx
+    local div_str
+    div_str = t.with_permutations
 
-    --tmp["other_matches"] = _U.results[1527].other_matches
-    --
+    if type(div_str)~="string" or div_str=="" then
+        div_str = " ;-;_;/;\\;|;&;;"
+    end
 
-    --coroutine.yield(cj.encode(tmp))
+    local div_tbl = get_div_tbl_from_str(div_str)
+    local a_str_normalized = split_str_with_div_tbl( t.s1, div_tbl )
+    local a_norm = table.concat(a_str_normalized," ")
+    local split_str_to_tbl = split_str_with_div_tbl( t.s2, div_tbl )
+
+
+    local perm_str
+    local j_score,new_j_score = 0
+    for k in t.p.perm( split_str_to_tbl ) do
+
+        perm_str = table.concat(k," ")
+        --t.prof.start()
+        new_j_score = t.jaro_score(a_norm, perm_str, false, false, false)
+        --t.prof.stop()
+        if new_j_score and new_j_score>j_score then 
+            j_score=new_j_score 
+        end
+
+    end
+
+    return j_score
 
 end
 
-return _res
+function u.iter_jaro(qry_a,qry_b,with_permutations)
+
+    --package.loaded.mobdebug = nil
+    --require('mobdebug').start("10.0.1.53")
+
+    local process_b_rows = function (_L)
+        local new_j_score
+        local cnt = 0
+        for b_row in _L.qry_b:rows{_L.b_q_offset,_L.b_q_lim} do
+            _L.i2,_L.s2 = b_row.b_idx,b_row.b_str
+            if _L.i2=="281" or _L.i2=="1139" or _L.i2=="1140" or _L.i2=="1141" or _L.i2=="1771" or _L.i2=="1772" or _L.i2=="1833" then
+               local a = 0
+            end
+            if _L.with_permutations==false then
+                new_j_score = _L.jaro_score(_L.s1, _L.s2, false, false, false)
+            else
+                --_L.prof.start()
+                new_j_score = _L.perm_jaro( _L )
+                --_L.prof.stop()
+            end
+
+
+            if new_j_score and new_j_score>0 then
+                if new_j_score>_L.j_score then
+                    _L.j_score = new_j_score
+                    _L.res_i2,_L.res_s2 = _L.i2,_L.s2
+                    _L.other_matches = {}
+                elseif new_j_score==_L.j_score then
+                    table.insert(_L.other_matches,b_row.b_idx)
+                end
+            end
+            cnt = cnt + 1
+        end
+        if cnt==_L.b_q_lim then
+            _L.b_q_offset = _L.b_q_offset + _L.b_q_lim
+            _L.process_b_rows(_L)
+        end
+    end
+
+    local process_a_rows = function (_L)
+        local cnt = 0
+        _L.a_rows = {}
+        for a_row in _L.qry_a:rows{_L.a_q_offset,_L.a_q_lim} do
+            table.insert(_L.a_rows,{i1=a_row.a_idx,s1=a_row.a_str,j_score=0})
+            cnt = cnt + 1
+        end
+        for _,a_row in ipairs(_L.a_rows) do
+            _L.i1,_L.s1 = a_row.i1,a_row.s1
+            _L.j_score = a_row.j_score
+            --_L.prof.start()
+            process_b_rows(_L)
+            --_L.prof.stop()
+            coroutine.yield{ a_idx=_L.i1, a_str=_L.s1, jaro_score=tostring(_L.j_score), b_str=_L.res_s2, b_idx=_L.res_i2, other_matches=cj.encode(_L.other_matches) }
+        end
+        if cnt==_L.a_q_lim then
+            _L.a_q_offset = _L.a_q_offset + _L.a_q_lim
+            _L.results = _L.process_a_rows(_L)
+        end
+
+    end
+
+    local query_prep = function (_L)
+
+        local qry_b_cnt,b_cnt
+        qry_b_cnt = "SELECT COUNT(*)::TEXT pllua_cnt FROM (".._L.orig_qry_b..") pllua_f1;"
+
+        for r in server.rows(qry_b_cnt) do
+            b_cnt = r["pllua_cnt"]
+            break
+        end
+
+        _L.b_q_lim = _L.qry_max
+        _L.a_q_lim = _L.qry_max
+        _L.a_q_offset,_L.b_q_offset = 0,0
+
+        local _qry_a = [[SELECT a_str::text,a_idx::text
+                         FROM (]].._L.orig_qry_a..[[) pllua_f
+                         ORDER BY pllua_f.a_idx ASC
+                         OFFSET $1 LIMIT $2;]]
+        _L.qry_a = server.prepare(_qry_a, {"int4","int4"}):save()
+
+        local _qry_b = [[SELECT b_str::text,b_idx::text
+                         FROM (]].._L.orig_qry_b..[[) pllua_f
+                         ORDER BY pllua_f.b_idx ASC
+                         OFFSET $1 LIMIT $2;]]
+        _L.qry_b = server.prepare(_qry_b, {"int4","int4"}):save()
+        return _L
+
+    end
+
+
+    --package.loaded.mobdebug = nil
+    --package.loaded.string_matching = nil
+    --package.loaded.cjson = nil
+    --package.loaded.tbl_utils = nil
+    --package.loaded.permutations = nil
+
+    
+    
+    --cj = require "cjson"
+    --tbl = require "tbl_utils"
+    local max_qry_result_cnt = 1000
+
+    _L = {}
+    for k,v in pairs(u) do _L[k]=v end
+    _L.orig_qry_a = qry_a
+    _L.orig_qry_b = qry_b
+    if with_permutations==false 
+        or tostring(with_permutations):lower()=="false" then
+        _L.with_permutations = false
+    else
+        _L.p = require"permutations"
+        _L.with_permutations = with_permutations
+    end
+    _L.qry_max = max_qry_result_cnt
+    
+    
+
+    --os.execute("echo '\\n\\n\\nSTARTING - '`date --utc` >> /tmp/tmpfile")
+    
+    _L = query_prep(_L)
+    _L.prof=require"profiler"
+    
+    --_L.prof.start()
+    _L.process_a_rows,_L.process_b_rows = process_a_rows,process_b_rows
+    --_L.prof.stop()
+    
+    --ProFi = require 'ProFi'
+		--ProFi:start()
+    
+    process_a_rows(_L)
+    
+    --ProFi:stop()
+		--ProFi:writeReport( 'process_a_rows_report.txt' )
+    
+
+end
+
+return u

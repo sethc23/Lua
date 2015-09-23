@@ -19,6 +19,9 @@ commands = {
    },
    ["luarocks-admin-5.1"] = {
       "luarocks/2.2.2-1"
+   },
+   summary = {
+      "luaprofiler/2.0.2-2"
    }
 }
 dependencies = {
@@ -41,6 +44,49 @@ dependencies = {
             name = "lua"
          }
       }
+   },
+   copas = {
+      ["2.0.0-1"] = {
+         {
+            constraints = {
+               {
+                  op = ">=",
+                  version = {
+                     5, 1, string = "5.1"
+                  }
+               }, {
+                  op = "<",
+                  version = {
+                     5, 3, string = "5.3"
+                  }
+               }
+            },
+            name = "lua"
+         }, {
+            constraints = {
+               {
+                  op = ">=",
+                  version = {
+                     2, 1, string = "2.1"
+                  }
+               }
+            },
+            name = "luasocket"
+         }, {
+            constraints = {
+               {
+                  op = ">=",
+                  version = {
+                     1, 14, string = "1.14"
+                  }
+               }
+            },
+            name = "coxpcall"
+         }
+      }
+   },
+   coxpcall = {
+      ["1.15.0-1"] = {}
    },
    inspect = {
       ["3.0-1"] = {
@@ -65,6 +111,26 @@ dependencies = {
                   op = ">=",
                   version = {
                      5, 1, string = "5.1"
+                  }
+               }
+            },
+            name = "lua"
+         }
+      }
+   },
+   lsocket = {
+      ["1.4-1"] = {
+         {
+            constraints = {
+               {
+                  op = ">=",
+                  version = {
+                     5, 1, string = "5.1"
+                  }
+               }, {
+                  op = "<=",
+                  version = {
+                     5, 3, string = "5.3"
                   }
                }
             },
@@ -102,8 +168,50 @@ dependencies = {
          }
       }
    },
+   ["lua-websockets"] = {
+      ["v2.1-1"] = {
+         {
+            constraints = {
+               {
+                  op = ">=",
+                  version = {
+                     5, 1, string = "5.1"
+                  }
+               }
+            },
+            name = "lua"
+         }, {
+            constraints = {},
+            name = "struct"
+         }, {
+            constraints = {},
+            name = "luasocket"
+         }, {
+            constraints = {},
+            name = "luabitop"
+         }, {
+            constraints = {},
+            name = "copas"
+         }
+      }
+   },
    luafilesystem = {
       ["1.6.3-1"] = {
+         {
+            constraints = {
+               {
+                  op = ">=",
+                  version = {
+                     5, 1, string = "5.1"
+                  }
+               }
+            },
+            name = "lua"
+         }
+      }
+   },
+   luaprofiler = {
+      ["2.0.2-2"] = {
          {
             constraints = {
                {
@@ -182,6 +290,9 @@ dependencies = {
             name = "lua"
          }
       }
+   },
+   ["luasocket-unix"] = {
+      ["2.0.2-2"] = {}
    },
    luuid = {
       ["20120501-1"] = {
@@ -272,6 +383,26 @@ dependencies = {
             name = "lua"
          }
       }
+   },
+   struct = {
+      ["1.4-1"] = {
+         {
+            constraints = {
+               {
+                  op = ">=",
+                  version = {
+                     5, 1, string = "5.1"
+                  }
+               }, {
+                  op = "<",
+                  version = {
+                     5, 3, string = "5.3"
+                  }
+               }
+            },
+            name = "lua"
+         }
+      }
    }
 }
 modules = {
@@ -283,6 +414,24 @@ modules = {
    },
    ["cjson.util"] = {
       "lua-cjson/2.1.0-1"
+   },
+   copas = {
+      "copas/2.0.0-1"
+   },
+   ["copas.ftp"] = {
+      "copas/2.0.0-1"
+   },
+   ["copas.http"] = {
+      "copas/2.0.0-1"
+   },
+   ["copas.limit"] = {
+      "copas/2.0.0-1"
+   },
+   ["copas.smtp"] = {
+      "copas/2.0.0-1"
+   },
+   coxpcall = {
+      "coxpcall/1.15.0-1"
    },
    des56 = {
       "md5/1.2-1"
@@ -298,6 +447,9 @@ modules = {
    },
    lpeg = {
       "lpeg/0.12.2-1"
+   },
+   lsocket = {
+      "lsocket/1.4-1"
    },
    ltn12 = {
       "luasocket/3.0rc1-2"
@@ -524,6 +676,9 @@ modules = {
    ["pgmoon.socket"] = {
       "pgmoon/1.1.1-1"
    },
+   profiler = {
+      "luaprofiler/2.0.2-2"
+   },
    prompt = {
       "luaprompt/0.6-1"
    },
@@ -558,7 +713,7 @@ modules = {
       "luasocket/3.0rc1-2"
    },
    ["socket.unix"] = {
-      "luasocket/3.0rc1-2"
+      "luasocket/3.0rc1-2", "luasocket-unix/2.0.2-2"
    },
    ["socket.url"] = {
       "luasocket/3.0rc1-2"
@@ -572,8 +727,50 @@ modules = {
    stringdistance = {
       "stringdistance/1.1.0-1"
    },
+   struct = {
+      "struct/1.4-1"
+   },
    uuid = {
       "luuid/20120501-1"
+   },
+   websocket = {
+      "lua-websockets/v2.1-1"
+   },
+   ["websocket.bit"] = {
+      "lua-websockets/v2.1-1"
+   },
+   ["websocket.client"] = {
+      "lua-websockets/v2.1-1"
+   },
+   ["websocket.client_copas"] = {
+      "lua-websockets/v2.1-1"
+   },
+   ["websocket.client_ev"] = {
+      "lua-websockets/v2.1-1"
+   },
+   ["websocket.ev_common"] = {
+      "lua-websockets/v2.1-1"
+   },
+   ["websocket.frame"] = {
+      "lua-websockets/v2.1-1"
+   },
+   ["websocket.handshake"] = {
+      "lua-websockets/v2.1-1"
+   },
+   ["websocket.server"] = {
+      "lua-websockets/v2.1-1"
+   },
+   ["websocket.server_copas"] = {
+      "lua-websockets/v2.1-1"
+   },
+   ["websocket.server_ev"] = {
+      "lua-websockets/v2.1-1"
+   },
+   ["websocket.sync"] = {
+      "lua-websockets/v2.1-1"
+   },
+   ["websocket.tools"] = {
+      "lua-websockets/v2.1-1"
    }
 }
 repository = {
@@ -585,6 +782,37 @@ repository = {
             dependencies = {},
             modules = {
                argparse = "argparse.lua"
+            }
+         }
+      }
+   },
+   copas = {
+      ["2.0.0-1"] = {
+         {
+            arch = "installed",
+            commands = {},
+            dependencies = {
+               coxpcall = "1.15.0-1",
+               luasocket = "3.0rc1-2"
+            },
+            modules = {
+               copas = "copas.lua",
+               ["copas.ftp"] = "copas/ftp.lua",
+               ["copas.http"] = "copas/http.lua",
+               ["copas.limit"] = "copas/limit.lua",
+               ["copas.smtp"] = "copas/smtp.lua"
+            }
+         }
+      }
+   },
+   coxpcall = {
+      ["1.15.0-1"] = {
+         {
+            arch = "installed",
+            commands = {},
+            dependencies = {},
+            modules = {
+               coxpcall = "coxpcall.lua"
             }
          }
       }
@@ -610,6 +838,18 @@ repository = {
             modules = {
                lpeg = "lpeg.so",
                re = "re.lua"
+            }
+         }
+      }
+   },
+   lsocket = {
+      ["1.4-1"] = {
+         {
+            arch = "installed",
+            commands = {},
+            dependencies = {},
+            modules = {
+               lsocket = "lsocket.so"
             }
          }
       }
@@ -644,6 +884,35 @@ repository = {
          }
       }
    },
+   ["lua-websockets"] = {
+      ["v2.1-1"] = {
+         {
+            arch = "installed",
+            commands = {},
+            dependencies = {
+               copas = "2.0.0-1",
+               coxpcall = "1.15.0-1",
+               luasocket = "3.0rc1-2",
+               struct = "1.4-1"
+            },
+            modules = {
+               websocket = "websocket.lua",
+               ["websocket.bit"] = "websocket/bit.lua",
+               ["websocket.client"] = "websocket/client.lua",
+               ["websocket.client_copas"] = "websocket/client_copas.lua",
+               ["websocket.client_ev"] = "websocket/client_ev.lua",
+               ["websocket.ev_common"] = "websocket/ev_common.lua",
+               ["websocket.frame"] = "websocket/frame.lua",
+               ["websocket.handshake"] = "websocket/handshake.lua",
+               ["websocket.server"] = "websocket/server.lua",
+               ["websocket.server_copas"] = "websocket/server_copas.lua",
+               ["websocket.server_ev"] = "websocket/server_ev.lua",
+               ["websocket.sync"] = "websocket/sync.lua",
+               ["websocket.tools"] = "websocket/tools.lua"
+            }
+         }
+      }
+   },
    luafilesystem = {
       ["1.6.3-1"] = {
          {
@@ -652,6 +921,20 @@ repository = {
             dependencies = {},
             modules = {
                lfs = "lfs.so"
+            }
+         }
+      }
+   },
+   luaprofiler = {
+      ["2.0.2-2"] = {
+         {
+            arch = "installed",
+            commands = {
+               summary = "summary.lua"
+            },
+            dependencies = {},
+            modules = {
+               profiler = "profiler.so"
             }
          }
       }
@@ -792,6 +1075,18 @@ repository = {
          }
       }
    },
+   ["luasocket-unix"] = {
+      ["2.0.2-2"] = {
+         {
+            arch = "installed",
+            commands = {},
+            dependencies = {},
+            modules = {
+               ["socket.unix"] = "socket/unix.so"
+            }
+         }
+      }
+   },
    luuid = {
       ["20120501-1"] = {
          {
@@ -854,6 +1149,18 @@ repository = {
             dependencies = {},
             modules = {
                stringdistance = "stringdistance.so"
+            }
+         }
+      }
+   },
+   struct = {
+      ["1.4-1"] = {
+         {
+            arch = "installed",
+            commands = {},
+            dependencies = {},
+            modules = {
+               struct = "struct.so"
             }
          }
       }

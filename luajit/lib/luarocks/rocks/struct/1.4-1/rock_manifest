@@ -1,0 +1,6 @@
+rock_manifest = {
+   lib = {
+      ["struct.so"] = "3b1cd75604fa461db5a7eb58479fa52a"
+   },
+   ["struct-1.4-1.rockspec"] = "d2a2db5998ed26f41d539a4d776611c7"
+}

@@ -114,17 +114,5 @@ function u.show (_var,_how)
 end
 
 
-local defaults={
-a_cols_as_prefix="" , b_cols_as_prefix="",
-a_cols_as_suffix="", b_cols_as_suffix="",
-iter_a_str_parts=false, iter_b_str_parts=false,
-iter_a_str_perms=false, iter_b_str_perms=true,
-div_str="",
-a_str_idx_cond="jaro_score>=0 AND jaro_score<0.95",
-a_str_condition="ts_uid=%(a_idx)s AND jaro_score>=0",
-b_str_condition="",
-update_cond="qry.jaro_score >= match.jaro_score",
-first_match_only=true
-}
 
 return u

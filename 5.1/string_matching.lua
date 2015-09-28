@@ -297,14 +297,16 @@ function u.perm_jaro(t)
         local a_str = table.concat( a_str_normalized, concat_str )
         local b_str_split_to_tbl = split_str_with_div_tbl( b_str, div_tbl )
         local j_score,new_j_score = 0
+        local match_str
         for k in t.p.perm( b_str_split_to_tbl ) do
             b_str = table.concat(k, concat_str)
             new_j_score = u.jaro_score( a_str, b_str, false, false, false )
             if new_j_score and new_j_score>j_score then
                 j_score = new_j_score
+                match_str = b_str
             end
         end
-        return j_score
+        return j_score,match_str
     end
 
     local b_iter = function(concat_str,div_str,div_tbl,a_str,b_str)
@@ -312,16 +314,18 @@ function u.perm_jaro(t)
         local a_norm = table.concat(a_str_normalized,concat_str)
         local b_str_split_to_tbl = split_str_with_div_tbl( b_str, div_tbl )
         local j_score,new_j_score = 0
+        local match_str
         for i in pairs( b_str_split_to_tbl ) do
             new_j_score = u.jaro_score(a_norm, b_str_split_to_tbl[i], false, false, false)
             if new_j_score and new_j_score>j_score then
                 j_score=new_j_score
+                match_str=b_str_split_to_tbl[i]
             end
         end
-        return j_score
+        return j_score,match_str
     end
 
-
+    -- TODO: need to develop feature for div_type="all" (current) vs. div_type="each" (best match after iterating each div_str)
 
     --package.loaded.mobdebug = nil
     --require('mobdebug').start("10.0.1.53")
@@ -334,7 +338,6 @@ function u.perm_jaro(t)
 --    ]])
 
 
---    div_str = t.with_permutations
 
     if type(t)=="string" then
         local tmp = t
@@ -359,31 +362,40 @@ function u.perm_jaro(t)
 
 
 
-
     local div_tbl = get_div_tbl_from_str(t.div_str)
     local a_str_split_to_tbl = split_str_with_div_tbl( t.s1, div_tbl )
     local a_str
     local b_str = t.s2
-    local j_score,new_j_score = 0
+    local iter_res = {}
+    local return_res = {}
+    iter_res.j_score = 0
+    return_res.j_score = 0
+    local new_j_score
     for k in a_str_mod( a_str_split_to_tbl ) do
 
         if type(a_str_split_to_tbl[k])=="table" then 
             a_str = table.concat(a_str_split_to_tbl[k],concat_str)
         else a_str = a_str_split_to_tbl[k] end
-
+        iter_res.a_str = a_str
+        
         if type(b_str_mod)=="function" then
-            new_j_score = b_str_mod(concat_str,div_str,div_tbl,a_str,b_str)
+            local new_b_str
+            new_j_score,new_b_str = b_str_mod(concat_str,div_str,div_tbl,a_str,b_str)
+            iter_res.b_str = new_b_str
         else
             new_j_score = u.jaro_score(a_str, b_str, false, false, false)
+            iter_res.b_str = b_str
         end
 
-        if new_j_score and new_j_score>j_score then  -- nil return when no matches
-            j_score=new_j_score
+        if new_j_score and new_j_score>return_res.j_score then  -- nil return when no matches
+            return_res.j_score = new_j_score
+            return_res.a_str = iter_res.a_str
+            return_res.b_str = iter_res.b_str
         end
 
     end
 
-    return j_score
+    return return_res
 
 end
 
@@ -393,29 +405,31 @@ function u.iter_jaro(qry_a,qry_b,params)
     --require('mobdebug').start("10.0.1.53")
 
     local process_b_rows = function (_L)
+        local iter_res,return_res = {},{}
         local new_j_score
         local cnt = 0
         for b_row in _L.qry_b:rows{_L.b_q_offset,_L.b_q_lim} do
             _L.i2,_L.s2 = b_row.b_idx,b_row.b_str
-            if _L.i2=="281" or _L.i2=="1139" or _L.i2=="1140" or _L.i2=="1141" or _L.i2=="1771" or _L.i2=="1772" or _L.i2=="1833" then
-               local a = 0
-            end
             if _L.with_string_mods==true then
-                new_j_score = _L.perm_jaro( _L )
+                iter_res = _L.perm_jaro( _L )
             else
                 new_j_score = _L.jaro_score(_L.s1, _L.s2, false, false, false)
+                iter_res.a_str = _L.s1
+                iter_res.b_str = _L.s2
+                iter_res.j_score = new_j_score
             end
 
 
-            if new_j_score and new_j_score>0 then
-                if new_j_score>_L.j_score then
-                    _L.j_score = new_j_score
-                    _L.res_i2,_L.res_s2 = _L.i2,_L.s2
-                    _L.other_matches = {}
-                elseif new_j_score==_L.j_score then
-                    table.insert(_L.other_matches,b_row.b_idx)
-                end
+            --if new_j_score and new_j_score>0 then
+            if iter_res.j_score and iter_res.j_score>_L.j_score then
+                _L.j_score = iter_res.j_score
+                _L.res_i2,_L.res_s2 = _L.i2,_L.s2
+                _L.res_m1,_L.res_m2 = iter_res.a_str,iter_res.b_str
+                _L.other_matches = {}
+            elseif new_j_score==_L.j_score then
+                table.insert(_L.other_matches,b_row.b_idx)
             end
+            --end
             cnt = cnt + 1
         end
         if cnt==_L.b_q_lim then
@@ -441,12 +455,28 @@ function u.iter_jaro(qry_a,qry_b,params)
 
             if _L.caller then
                 if _L.caller:lower()=="lua" then
-                    coroutine.yield{ a_idx=_L.i1, a_str=_L.s1, jaro_score=_L.j_score,
-                        b_str=_L.res_s2, b_idx=_L.res_i2, other_matches=_L.other_matches }
+                    coroutine.yield{ 
+                      a_idx=_L.i1,
+                      a_str=_L.s1,
+                      a_match=_L.res_m1,
+                      jaro_score=_L.j_score,
+                      b_match=_L.res_m2,
+                      b_str=_L.res_s2,
+                      b_idx=_L.res_i2,
+                      other_matches=_L.other_matches
+                      }
                 end
             else
-                coroutine.yield{ a_idx=_L.i1, a_str=_L.s1, jaro_score=tostring(_L.j_score),
-                    b_str=_L.res_s2, b_idx=_L.res_i2, other_matches=cj.encode(_L.other_matches) }
+                coroutine.yield{ 
+                  a_idx=_L.i1, 
+                  a_str=_L.s1,
+                  a_match=_L.res_m1,
+                  jaro_score=tostring(_L.j_score),
+                  b_match=_L.res_m2,
+                  b_str=_L.res_s2, 
+                  b_idx=_L.res_i2, 
+                  other_matches=cj.encode(_L.other_matches) 
+                  }
             end
                 
         end
@@ -507,13 +537,8 @@ function u.iter_jaro(qry_a,qry_b,params)
 
 
 
-    if params==true
-        or tostring(params):lower()=="true" then
-        _L.p = require"permutations"
-        _L.with_string_mods = true
-        _L.b_str_mod = "perm"
-    else
-        if type(params)=="string" then params = cj.decode(params) end
+    if type(params)=="string" and params~="" then 
+        params = cj.decode(params)
         _L = setmetatable(_L, {__index = params})
         if params.a_str_mod or params.b_str_mod then 
             if params.a_str_mod~="" or params.b_str_mod~="" then
@@ -525,6 +550,7 @@ function u.iter_jaro(qry_a,qry_b,params)
             _L.caller = params.func_caller
         end
     end
+
 
     _L.qry_max = max_qry_result_cnt
 
@@ -543,8 +569,8 @@ end
 
 function u.manage_iter_jaro(params)
 
-    package.loaded.mobdebug = nil
-    require('mobdebug').start("10.0.1.53")
+    --package.loaded.mobdebug = nil
+    --require('mobdebug').start("10.0.1.53")
 
     local decode_json = function(_input)
         assert(type(_input)=="string", "expected string input for decoding json into table")
@@ -620,8 +646,6 @@ function u.manage_iter_jaro(params)
         end
     end
 
-
-
     local func_defaults = {
             first_match_only                =   true,
             a_cols_as_prefix                =   "",
@@ -639,6 +663,7 @@ function u.manage_iter_jaro(params)
             func_caller                     =   "lua"
         }
 
+    --{"col":"ts_stations",
 
     local _L = {}
     local input_a = {
@@ -689,10 +714,6 @@ function u.manage_iter_jaro(params)
     _L.qry_a_cnt = get_query_count(_L.qry_a)
     _L.qry_b = make_inner_qry("b",input_b,_L)
     _L.qry_b_cnt = get_query_count(_L.qry_b)
-
-    local time                  =   require "time"
-    local t                     =   time.nowlocal()
-    msg["eta"]                  =   tostring(t)
 
 
     for k in run_query(_L.qry_a, _L.qry_b, _L.params) do

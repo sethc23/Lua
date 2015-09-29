@@ -665,7 +665,7 @@ function u.manage_iter_jaro(input_params)
                                 ")) " ..qry_prefix.. "_str," ..
                             params[qry_prefix.."_uid"] .. " " ..qry_prefix.. "_idx" ..
                             params[qry_prefix.."_related_cols"] ..
-                        " FROM " .. params[qry_prefix.."_tbl"] ..
+                        " FROM " .. params[qry_prefix.."_tbl"] .." "..qry_prefix..
                         params[qry_prefix.."_conditions"] ..
                         " ORDER BY " .. params[qry_prefix.."_uid"]
     end
@@ -675,12 +675,12 @@ function u.manage_iter_jaro(input_params)
                 ") SELECT COUNT(*) FROM _sel")[1].count)
     end
 
-    local run_query = function (qry_a, qry_b, with_perms)
-        return coroutine.wrap(function () u.iter_jaro(qry_a, qry_b, with_perms) end)
+    local run_query = function (qry_a, qry_b, params)
+        return coroutine.wrap(function () u.iter_jaro(qry_a, qry_b, params) end)
     end
 
-    local first_match_only = function(qry_a, qry_b, with_perms)
-        for k in run_query(qry_a, qry_b, with_perms) do
+    local first_match_only = function(qry_a, qry_b, params)
+        for k in run_query(qry_a, qry_b, params) do
             coroutine.yield(k)
         end
     end
@@ -704,6 +704,7 @@ function u.manage_iter_jaro(input_params)
             b_str_mod                       =   "norm",  --false,"iter","perm"
             b_idx_conditions                =   "",
             b_str_conditions                =   "",
+            match_conditions                =   "",
             update_conditions               =   "",
             do_update                       =   false,
             first_match_only                =   true,
@@ -727,7 +728,7 @@ function u.manage_iter_jaro(input_params)
 
         params.update_mapping = update_mapping
 
-        local qry = "WITH res AS ( SELECT "..
+        local qry = "WITH new AS ( SELECT "..
                             "'"..r.a_idx.."'::INTEGER a_idx, "..
                             "'"..r.a_str.."'::TEXT a_str, "..
                             "'"..r.a_match.."'::TEXT a_match, "..
@@ -741,7 +742,7 @@ function u.manage_iter_jaro(input_params)
                         " SET "
 
         for k,v in pairs(params.update_mapping) do
-            qry = qry..v.."=".."res."..k..", "
+            qry = qry..v.."=".."new."..k..", "
         end
         qry = qry:sub(1,#qry-2).." "
 
@@ -751,8 +752,8 @@ function u.manage_iter_jaro(input_params)
             end
         end
 
-        qry = qry.." FROM res  "..
-                   " WHERE res.a_idx=a."..params.update_mapping.a_idx.." "..
+        qry = qry.." FROM new  "..
+                   " WHERE new.a_idx=old."..params.update_mapping.a_idx.." "..
                    params.update_conditions..";"
         local a=0
         server.execute(qry)
@@ -870,6 +871,7 @@ function u.manage_iter_jaro(input_params)
     end
 
 
+    
     u.update_query = update_query
     u.iter_rules = iter_rules
     iter_rules(u,{},_L.params,1)

@@ -707,7 +707,6 @@ function u.manage_iter_jaro(input_params)
             update_conditions               =   "",
             do_update                       =   false,
             first_match_only                =   true,
-            numbers_exact                   =   true,
             concat_str                      =   "_",
             div_str                         =   " ;-;_;/;\\;|;&;;",
             min_jaro                        =   0.95,
@@ -717,48 +716,6 @@ function u.manage_iter_jaro(input_params)
 
     local update_query = function(r,params)
 
-        local qry = [[WITH qry AS (
-                            SELECT (z).*
-                            FROM z_string_matching(
-                                E'%(f_qry_a)s'::text,
-                                E'%(f_qry_b)s'::text,
-                                E'%(params_as_json)s'
-                                ) z
-                        )
-                        ,str_matching_form as (
-                            select
-                                _str.ts_uid,
-                                _str.ts_div_line,
-                                _str.ts_station
-                                ,z.a_str ts_str,
-                                    z.jaro_score::DOUBLE PRECISION,
-                                    z.b_str match_str
-                                ,_stat.station_name sub_station,
-                                    div_line sub_div_line,
-                                    z.b_idx::INTEGER sub_idx
-                                ,z.other_matches
-                            FROM qry z
-                            INNER JOIN str_matching _str
-                            ON _str.ts_uid = z.a_idx::INTEGER
-                            INNER JOIN sub_stations _stat
-                            ON _stat.uid = z.b_idx::INTEGER
-                            %(res_cond)s
-                        )
-                        ,upd AS (
-                            UPDATE str_matching _str
-                            SET
-                                ts_str=_res.ts_str,
-                                jaro_score=_res.jaro_score,
-                                match_str=_res.match_str,
-                                sub_station=_res.sub_station,
-                                sub_div_line=_res.sub_div_line,
-                                sub_idx=_res.sub_idx
-                            FROM  str_matching_form _res
-                            WHERE _res.ts_uid=_str.ts_uid
-                            AND _res.jaro_score > _str.jaro_score
-                            RETURNING uid
-                        )
-                        SELECT * FROM str_matching_form]]
         local update_mapping = {
             a_idx       =   "ts_uid",
             a_str       =   "ts_str",
@@ -770,7 +727,7 @@ function u.manage_iter_jaro(input_params)
 
         params.update_mapping = update_mapping
 
-        local qry = "WITH res AS ( "..
+        local qry = "WITH res AS ( SELECT "..
                             "'"..r.a_idx.."'::INTEGER a_idx, "..
                             "'"..r.a_str.."'::TEXT a_str, "..
                             "'"..r.a_match.."'::TEXT a_match, "..
@@ -780,17 +737,23 @@ function u.manage_iter_jaro(input_params)
                             "'"..r.b_idx.."'::INTEGER b_idx, "..
                             "'"..r.other_matches.."'::TEXT[] other_matches "..
                         " )"..
-                        " UPDATE "..params.a_tbl .." _a "..
+                        " UPDATE "..params.a_tbl .." a "..
                         " SET "
 
         for k,v in pairs(params.update_mapping) do
-            qry = qry..v.."=".."_res."..k..", "
+            qry = qry..v.."=".."res."..k..", "
         end
         qry = qry:sub(1,#qry-2).." "
 
-        qry = qry.." FROM res _res "..
-                   " WHERE _res.a_idx =_a."..params.update_mapping.a_idx..
-                   params.update_condition..";"
+        if params.update_conditions and params.update_conditions~="" then
+            if params.update_conditions:match("%w+")~='AND' then
+                params.update_conditions = ' AND '..params.update_conditions
+            end
+        end
+
+        qry = qry.." FROM res  "..
+                   " WHERE res.a_idx=a."..params.update_mapping.a_idx.." "..
+                   params.update_conditions..";"
         local a=0
         server.execute(qry)
 

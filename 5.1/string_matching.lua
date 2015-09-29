@@ -17,13 +17,26 @@ split_str_with_div = str_util.split_gen
 
 local u = {}
 
-function u.jaro_score(s1,s2,winklerize,long_tolerance,verbose)
+function u.jaro_score(s1,s2,winklerize,long_tolerance,numeric_lcs,verbose)
+    --package.loaded.mobdebug = nil
+    --require('mobdebug').start("10.0.1.53")
+    
     local log_to_file           =   false
     -- _debug(                         {msg={"NEW JARO SCORE\\n\\n"},verbose=verbose,to_file=log_to_file})
 
     --if #s1==0 or #s2==0 then
     --    _debug(                     {msg={"s1 or s2 has no length!"},verbose=verbose,to_file=log_to_file})
     --end
+
+    -- require matching numeric LCS (lowest common substring)
+    if numeric_lcs then
+        --package.loaded.mobdebug = nil
+        --require('mobdebug').start("10.0.1.53")
+        local n1 = s1:gsub("[^%d]*","")
+        local n2 = s2:gsub("[^%d]*","")
+        if n1~=n2 then return 0 end
+    end
+
 
     -- set #a>#b
     local a,b                 =   "",""
@@ -308,7 +321,7 @@ function u.perm_jaro(t)
         local match_str
         for k in t.p.perm( b_str_split_to_tbl ) do
             b_str = table.concat(k, concat_str)
-            new_j_score = u.jaro_score( a_str_norm, b_str, false, false, false )
+            new_j_score = u.jaro_score( a_str_norm, b_str, false, false, t.numeric_lcs, false )
             if new_j_score and new_j_score>j_score then
                 j_score = new_j_score
                 match_str = b_str
@@ -323,7 +336,7 @@ function u.perm_jaro(t)
         local j_score,new_j_score = 0
         local match_str
         for i in pairs( b_str_split_to_tbl ) do
-            new_j_score = u.jaro_score(a_str_norm, b_str_split_to_tbl[i], false, false, false)
+            new_j_score = u.jaro_score(a_str_norm, b_str_split_to_tbl[i], false, false, t.numeric_lcs, false)
             if new_j_score and new_j_score>j_score then
                 j_score=new_j_score
                 match_str=b_str_split_to_tbl[i]
@@ -365,9 +378,9 @@ function u.perm_jaro(t)
     if t.a_str_mod=="iter" then a_str_mod = pairs
     elseif t.a_str_mod=="perm" then a_str_mod = t.p.perm
     elseif not t.a_str_mod or t.a_str_mod=="" or t.a_str_mod=="norm" then
-        a_str_mod = _normalize
+        a_str_mod = function(in_str) return pairs({_normalize(in_str)}) end
     else
-        a_str_mod =   function(in_str) return in_str end
+        a_str_mod =   function(in_str) return pairs({in_str}) end
     end
 
     if t.b_str_mod=="iter" then b_str_mod = pairs 
@@ -396,7 +409,7 @@ function u.perm_jaro(t)
             new_j_score,new_b_str = b_str_mod(t.concat_str,t.div_str,t.div_tbl,a_str,b_str)
             iter_res.b_str = new_b_str
         else
-            new_j_score = u.jaro_score(a_str, b_str, false, false, false)
+            new_j_score = u.jaro_score(a_str, b_str, false, false, t.numeric_lcs, false)
             iter_res.b_str = b_str
         end
 
@@ -423,10 +436,10 @@ function u.iter_jaro(qry_a,qry_b,params)
         local cnt = 0
         for b_row in _L.qry_b:rows{_L.b_q_offset,_L.b_q_lim} do
             _L.i2,_L.s2 = b_row.b_idx,b_row.b_str
-            if _L.with_string_mods==true then
+            if _L.a_str_mod or _L.b_str_mod then
                 iter_res = _L.perm_jaro( _L )
             else
-                new_j_score = _L.jaro_score(_L.s1, _L.s2, false, false, false)
+                new_j_score = _L.jaro_score(_L.s1, _L.s2, false, false, _L.numeric_lcs, false)
                 iter_res.a_str = _L.s1
                 iter_res.b_str = _L.s2
                 iter_res.j_score = new_j_score
@@ -552,17 +565,23 @@ function u.iter_jaro(qry_a,qry_b,params)
 
     if type(params)=="string" and params~="" then 
         params = cj.decode(params)
-        _L = setmetatable(_L, {__index = params})
-        if params.a_str_mod or params.b_str_mod then 
-            if params.a_str_mod~="" or params.b_str_mod~="" then
-              _L.p = require"permutations"
-              _L.with_string_mods = true
-            end
-        end
-        if params.func_caller then
-            _L.caller = params.func_caller
+    end
+    for k,v in pairs(params) do
+        if tostring(v):lower()=="false" then params[k]=false end
+        if tostring(v):lower()=="true" then params[k]=true end
+    end
+    if params.numeric_lcs==nil then params.numeric_lcs=false end
+    _L = setmetatable(_L, {__index = params})
+    if params.a_str_mod or params.b_str_mod then 
+        if params.a_str_mod~="" or params.b_str_mod~="" then
+          _L.p = require"permutations"
+          _L.with_string_mods = true
         end
     end
+    if params.func_caller then
+        _L.caller = params.func_caller
+    end
+
 
 
     _L.qry_max = max_qry_result_cnt
@@ -601,7 +620,7 @@ function u.manage_iter_jaro(input_params)
           _inputs[1] = tmp
         else _i=#_inputs end
         for i=1, _i do
-            _res[i] = setmetatable({}, {__index=_defaults})
+            _res[i] = setmetatable(_defaults, {__index=_defaults})
             for k,v in pairs(_inputs[i]) do
                 if not _res[i][k] or _res[i][k]==nil then
                     assert(false,"'"..k.."' is not an known parameter")
@@ -690,7 +709,8 @@ function u.manage_iter_jaro(input_params)
             concat_str                      =   "_",
             div_str                         =   " ;-;_;/;\\;|;&;;",
             min_jaro                        =   0.95,
-            func_caller                     =   "lua"
+            func_caller                     =   "lua",
+            numeric_lcs                     =   true
         }
 
 
@@ -708,8 +728,9 @@ function u.manage_iter_jaro(input_params)
 
     --]]
 
-    local iter_rules = function (res,iter_params, n)
-        run_params = iter_params[n]
+    local u = {}
+    local iter_rules = function (u,res,iter_params, n)
+        local run_params = iter_params[n]
 
         _L.qry_a = make_inner_qry("a",run_params)
         _L.qry_b = make_inner_qry("b",run_params)
@@ -732,16 +753,18 @@ function u.manage_iter_jaro(input_params)
                     res[k.a_idx] = setmetatable(k, {__index=k})
                     res[k.a_idx] = setmetatable(k, {__index=k})
 
-                    local prefix = " OR "
-                    if iter_params[i+1].a_idx_conditions=="" then prefix="" end
-                    iter_params[i+1].a_idx_conditions = iter_params[i+1].a_idx_conditions..prefix..iter_params[i+1].a_uid.."="..k.a_str.." "
+                    if #iter_params>=n+1 then
+                        local prefix = " OR "
+                        if iter_params[n+1].a_idx_conditions=="" then prefix="" end
+                        iter_params[n+1].a_idx_conditions = iter_params[n+1].a_idx_conditions..prefix..iter_params[n+1].a_uid.."="..k.a_str.." "
+                    end
 
                 -- if old and new both not exist in the other, go with higher value
                 -- if choice between (lower score but exists entirely inside of match) or higher value, chose lower value
                 -- if old and new both exist in each other, go with higher value
                 elseif
 
-                    -- if old/new (both not exist) or (both exist), go by score
+                -- if old/new (both not inside match) or (both inside match), go by score
                     (not res[k.a_idx].a_in_b and not res[k.a_idx].b_in_a)
                         or
                             ( (res[k.a_idx].a_in_b or res[k.a_idx].b_in_a) and
@@ -758,23 +781,32 @@ function u.manage_iter_jaro(input_params)
                             if k.a_str:find(k.b_str) then res[k.a_idx].a_in_b=true end
                             if k.b_str:find(k.a_str) then res[k.a_idx].b_in_a=true end
                         end
-                    end
 
-                    -- if choice between (lower/inside match) and (higher/no inside match)
-                    if k.jaro_score>=res[k.a_idx].jaro_score then
 
-                        if (not res[k.a_idx].a_in_b or not res[k.a_idx].b_in_a)
-                            and ( k.a_str:find(k.b_str) or k.b_str:find(k.a_str) )
-                                then
+                -- if choice between (no inside match) and (inside match), go by inside match
+                elseif (not res[k.a_idx].a_in_b or not res[k.a_idx].b_in_a)
+                        and ( k.a_str:find(k.b_str) or k.b_str:find(k.a_str) )
+                            then
                             res[k.a_idx] = setmetatable(k, {__index=k})
                             if k.a_str:find(k.b_str) then res[k.a_idx].a_in_b=true end
                             if k.b_str:find(k.a_str) then res[k.a_idx].b_in_a=true end
-                        end
-                    end
                 end
+                
+                -- if choice between (lower/inside match) and (higher/no inside match), go by inside match
+--                elseif k.jaro_score>=res[k.a_idx].jaro_score then
+
+--                        if (not res[k.a_idx].a_in_b or not res[k.a_idx].b_in_a)
+--                            and ( k.a_str:find(k.b_str) or k.b_str:find(k.a_str) )
+--                                then
+--                            res[k.a_idx] = setmetatable(k, {__index=k})
+--                            if k.a_str:find(k.b_str) then res[k.a_idx].a_in_b=true end
+--                            if k.b_str:find(k.a_str) then res[k.a_idx].b_in_a=true end
+--                        end
+--                    end
+            end
 
             if #iter_params>=n+1 then
-                coroutine.yield( iter_rules(res,iter_params, n+1) )
+                coroutine.yield( u.iter_rules(u,res,iter_params, n+1) )
             else
                 coroutine.yield( res )
             end
@@ -783,7 +815,9 @@ function u.manage_iter_jaro(input_params)
 
     end
 
-    iter_rules({},_L.params,1)
+    
+    u.iter_rules = iter_rules
+    iter_rules(u,{},_L.params,1)
 
 --    return "done"
     

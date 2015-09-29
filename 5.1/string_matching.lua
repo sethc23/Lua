@@ -292,15 +292,23 @@ function u.perm_jaro(t)
 
     end
 
+    local _normalize = function(_str)
+        if type(_str)=="table" then
+            return table.concat( _str, t.concat_str )
+        else
+            local tbl = split_str_with_div_tbl( _str, t.div_tbl )
+            return table.concat( tbl, t.concat_str )
+        end
+    end
+
     local b_perm = function(concat_str,div_str,div_tbl,a_str,b_str)
-        local a_str_normalized = split_str_with_div_tbl( a_str, div_tbl )
-        local a_str = table.concat( a_str_normalized, concat_str )
+        local a_str_norm = _normalize(a_str,div_tbl,concat_str)
         local b_str_split_to_tbl = split_str_with_div_tbl( b_str, div_tbl )
         local j_score,new_j_score = 0
         local match_str
         for k in t.p.perm( b_str_split_to_tbl ) do
             b_str = table.concat(k, concat_str)
-            new_j_score = u.jaro_score( a_str, b_str, false, false, false )
+            new_j_score = u.jaro_score( a_str_norm, b_str, false, false, false )
             if new_j_score and new_j_score>j_score then
                 j_score = new_j_score
                 match_str = b_str
@@ -310,13 +318,12 @@ function u.perm_jaro(t)
     end
 
     local b_iter = function(concat_str,div_str,div_tbl,a_str,b_str)
-        local a_str_normalized = split_str_with_div_tbl( a_str, div_tbl )
-        local a_norm = table.concat(a_str_normalized,concat_str)
+        local a_str_norm = _normalize(a_str,div_tbl,concat_str)
         local b_str_split_to_tbl = split_str_with_div_tbl( b_str, div_tbl )
         local j_score,new_j_score = 0
         local match_str
         for i in pairs( b_str_split_to_tbl ) do
-            new_j_score = u.jaro_score(a_norm, b_str_split_to_tbl[i], false, false, false)
+            new_j_score = u.jaro_score(a_str_norm, b_str_split_to_tbl[i], false, false, false)
             if new_j_score and new_j_score>j_score then
                 j_score=new_j_score
                 match_str=b_str_split_to_tbl[i]
@@ -348,24 +355,30 @@ function u.perm_jaro(t)
     if not t.div_str or t.div_str=="" then t.div_str = " ;-;_;/;\\;|;&;;" end
     if not t.concat_str then t.concat_str=" " end
 
+    t.div_tbl = get_div_tbl_from_str(t.div_str)
+    local a_str_split_to_tbl = split_str_with_div_tbl( t.s1, t.div_tbl )
+    local a_str
+    local b_str = t.s2
+    
+    
     local a_str_mod,b_str_mod
     if t.a_str_mod=="iter" then a_str_mod = pairs
     elseif t.a_str_mod=="perm" then a_str_mod = t.p.perm
+    elseif not t.a_str_mod or t.a_str_mod=="" or t.a_str_mod=="norm" then
+        a_str_mod = _normalize
     else
-        a_str_mod =   function(in_str,concat_str)
-                            return table.concat(in_str,concat_str)
-                        end
+        a_str_mod =   function(in_str) return in_str end
     end
 
-    if t.b_str_mod=="iter" then b_str_mod = pairs end
-    if t.b_str_mod=="perm" then b_str_mod = t.p.perm end
-
-
-
-    local div_tbl = get_div_tbl_from_str(t.div_str)
-    local a_str_split_to_tbl = split_str_with_div_tbl( t.s1, div_tbl )
-    local a_str
-    local b_str = t.s2
+    if t.b_str_mod=="iter" then b_str_mod = pairs 
+    elseif t.b_str_mod=="perm" then b_str_mod = t.p.perm 
+    elseif not t.b_str_mod or t.b_str_mod=="norm" then
+        b_str = _normalize(b_str)
+    else
+        b_str_mod =  nil
+    end
+    
+   
     local iter_res = {}
     local return_res = {}
     iter_res.j_score = 0
@@ -373,14 +386,14 @@ function u.perm_jaro(t)
     local new_j_score
     for k in a_str_mod( a_str_split_to_tbl ) do
 
-        if type(a_str_split_to_tbl[k])=="table" then 
-            a_str = table.concat(a_str_split_to_tbl[k],concat_str)
+        if type(k)=="table" then 
+            a_str = table.concat(k,t.concat_str)
         else a_str = a_str_split_to_tbl[k] end
         iter_res.a_str = a_str
         
         if type(b_str_mod)=="function" then
             local new_b_str
-            new_j_score,new_b_str = b_str_mod(concat_str,div_str,div_tbl,a_str,b_str)
+            new_j_score,new_b_str = b_str_mod(t.concat_str,t.div_str,t.div_tbl,a_str,b_str)
             iter_res.b_str = new_b_str
         else
             new_j_score = u.jaro_score(a_str, b_str, false, false, false)
@@ -567,10 +580,10 @@ function u.iter_jaro(qry_a,qry_b,params)
 
 end
 
-function u.manage_iter_jaro(params)
+function u.manage_iter_jaro(input_params)
 
-    --package.loaded.mobdebug = nil
-    --require('mobdebug').start("10.0.1.53")
+    package.loaded.mobdebug = nil
+    require('mobdebug').start("10.0.1.53")
 
     local decode_json = function(_input)
         assert(type(_input)=="string", "expected string input for decoding json into table")
@@ -579,56 +592,63 @@ function u.manage_iter_jaro(params)
     end
 
     local set_params = function (_inputs,_defaults)
-        for k,v in pairs(_inputs) do
-            if _defaults[k]==nil then
-                assert(false,"'"..k.."' is not an known parameter")
-            else
-                if v:lower()=="true" then
-                    _defaults[k]=true
-                elseif v:lower()=="false" then
-                    _defaults[k]=false
+        local _res = {}
+        local _i
+        if #_inputs==0 then 
+          _i=1
+          local tmp = _inputs
+          _inputs = {}
+          _inputs[1] = tmp
+        else _i=#_inputs end
+        for i=1, _i do
+            _res[i] = setmetatable({}, {__index=_defaults})
+            for k,v in pairs(_inputs[i]) do
+                if not _res[i][k] or _res[i][k]==nil then
+                    assert(false,"'"..k.."' is not an known parameter")
                 else
-                    _defaults[k]=v
-                end
-                local _k = k:lower()
-                if _k:find("^min") or _k:find("^max") then
-                    _defaults[k]=tonumber(_defaults[k])
+                    local _k = k:lower()
+                    if type(v)=="number" or _k:find("^min") or _k:find("^max") then
+                        _res[i][k]=tonumber(v)
+                    elseif v:lower()=="true" then
+                        _res[i][k]=true
+                    elseif v:lower()=="false" then
+                        _res[i][k]=false
+                    else
+                        _res[i][k]=v
+                    end
                 end
             end
         end
-        return _defaults
+        return _res
     end
 
-    local make_inner_qry = function (qry_prefix,qry_params,func_params)
+    local make_inner_qry = function (qry_prefix,params)
 
-        qry_params.concat_str = func_params.params.concat_str
-        local defaults = {
-                        concat_str         =   "_",
-                        uid_col            =   "uid",
-                        concat_cols        =   "",
-                        related_cols       =   "",
-                        table              =   "",
-                        conditions         =   ""
-                    }
-        qry_params = set_params(qry_params,defaults)
-        assert(qry_params.concat_cols,"input columns missing but required")
-        assert(qry_params.table,"input table missing but required")
+        assert(params[qry_prefix.."_cols"],"input columns missing but required")
+        assert(params[qry_prefix.."_tbl"],"input table missing but required")
 
-        if qry_params.related_cols~="" then
-            qry_params.related_cols = "," .. qry_params.related_cols
-        end
-        if qry_params.conditions~="" then
-            qry_params.conditions = " WHERE " .. qry_params.conditions
+        if params[qry_prefix.."_related_cols"]~="" then
+            params[qry_prefix.."_related_cols"] = "," .. params[qry_prefix.."_related_cols"]
         end
 
-        return "SELECT UPPER(CONCAT_WS('"..qry_params.concat_str.."'," ..
-                                qry_params.concat_cols ..
+        if params[qry_prefix.."_idx_conditions"]~="" and not params[qry_prefix.."_str_conditions"]~="" then
+            params[qry_prefix.."_conditions"] = " WHERE " .. params[qry_prefix.."_idx_conditions"]
+        elseif params[qry_prefix.."_str_conditions"]~="" and not params[qry_prefix.."_idx_conditions"]~="" then
+            params[qry_prefix.."_conditions"] = " WHERE " .. params[qry_prefix.."_str_conditions"]
+        elseif params[qry_prefix.."_idx_conditions"]~="" and params[qry_prefix.."_str_conditions"]~="" then
+            params[qry_prefix.."_conditions"] = " WHERE ("..params[qry_prefix.."_idx_conditions"]..") and ("..params[qry_prefix.."_str_conditions"]..")"
+        else
+            params[qry_prefix.."_conditions"] = ""
+        end
+
+        return "SELECT UPPER(CONCAT_WS('"..params.concat_str.."'," ..
+                                params[qry_prefix.."_cols"] ..
                                 ")) " ..qry_prefix.. "_str," ..
-                            qry_params.uid_col .. " " ..qry_prefix.. "_idx" ..
-                            qry_params.related_cols ..
-                        " FROM " .. qry_params.table ..
-                        qry_params.conditions ..
-                        " ORDER BY " .. qry_params.uid_col
+                            params[qry_prefix.."_uid"] .. " " ..qry_prefix.. "_idx" ..
+                            params[qry_prefix.."_related_cols"] ..
+                        " FROM " .. params[qry_prefix.."_tbl"] ..
+                        params[qry_prefix.."_conditions"] ..
+                        " ORDER BY " .. params[qry_prefix.."_uid"]
     end
 
     local get_query_count = function (qry)
@@ -647,136 +667,123 @@ function u.manage_iter_jaro(params)
     end
 
     local func_defaults = {
-            first_match_only                =   true,
+            a_cols                          =   "",
+            a_uid                           =   "",
+            a_tbl                           =   "",
+            a_related_cols                  =   "",
             a_cols_as_prefix                =   "",
-            b_cols_as_prefix                =   "",
             a_cols_as_suffix                =   "",
+            a_str_mod                       =   "norm",  --false,"iter","perm"
+            a_idx_conditions                =   "",
+            a_str_conditions                =   "",
+            b_cols                          =   "",
+            b_uid                           =   "",
+            b_tbl                           =   "",
+            b_related_cols                  =   "",
+            b_cols_as_prefix                =   "",
             b_cols_as_suffix                =   "",
-            a_str_mod                       =   false,  --false,"iter","perm"
-            b_str_mod                       =   false,  --false,"iter","perm"
+            b_str_mod                       =   "norm",  --false,"iter","perm"
+            b_idx_conditions                =   "",
+            b_str_conditions                =   "",
+            first_match_only                =   true,
+            numbers_exact                   =   true,
             concat_str                      =   "_",
             div_str                         =   " ;-;_;/;\\;|;&;;",
-            a_str_condition                 =   "",
-            b_str_condition                 =   "",
-            a_idx_condition                 =   "",
             min_jaro                        =   0.95,
             func_caller                     =   "lua"
         }
 
-    --{"col":"ts_stations",
 
     local _L = {}
-    local input_a = {
-                concat_cols="ts_station",
-                uid_col="ts_uid",
---                related_cols="div_line",
-                table="str_matching",
-                conditions=""
-                }
-    local input_b = {
-                concat_cols="station_name",
-                uid_col="uid",
---                related_cols="div_line",
-                table="sub_stations",
---                conditions="div_line='%(ts_div_line)s'"
-                --conditions="a.div_line=b.ts_div_line"
-                conditions=""
-                }
---    _L.params = set_params(decode_json(params), func_defaults)
-    _L.params = func_defaults
-    _L.params.first_match_only = false
-
-
-    if _L.params.first_match_only then
-        _L.qry_a = make_inner_qry("a",input_a,_L)
-        _L.qry_b = make_inner_qry("b",input_b,_L)
-        return first_match_only(_L.qry_a, _L.qry_b, _L.params)
-    end
-
-
-    
-    local res = {}
+    _L.params = set_params(decode_json(input_params), func_defaults)
 
     --[[
 
-    most specific to least specific
+        most specific to least specific
 
 
-    numbers exact
-    iter_a
-    skip_if_one
-
-
+        numbers exact
+        iter_a
+        skip_if_one
 
     --]]
 
-    _L.qry_a = make_inner_qry("a",input_a,_L)
-    _L.qry_a_cnt = get_query_count(_L.qry_a)
-    _L.qry_b = make_inner_qry("b",input_b,_L)
-    _L.qry_b_cnt = get_query_count(_L.qry_b)
+    local iter_rules = function (res,iter_params, n)
+        run_params = iter_params[n]
 
+        _L.qry_a = make_inner_qry("a",run_params)
+        _L.qry_b = make_inner_qry("b",run_params)
+--        _L.qry_a_cnt = get_query_count(_L.qry_a)
+--        _L.qry_b_cnt = get_query_count(_L.qry_b)
 
-    for k in run_query(_L.qry_a, _L.qry_b, _L.params) do
+        if run_params.first_match_only then
+            return first_match_only(_L.qry_a, _L.qry_b, run_params)
+        end
 
-        if k.jaro_score>=_L.params.min_jaro then
-            k.jaro_score = tostring(k.jaro_score)
-            k.other_matches=cj.encode(k.other_matches)
-            --coroutine.yield(k)
-        else
-            res[k.a_idx] = setmetatable(k, {__index=k})
-            if k.a_str:find(k.b_str) then res[k.a_idx].a_in_b=true end
+        for k in run_query(_L.qry_a, _L.qry_b, run_params) do
 
-            input_a.conditions = "ts_uid=" .. k.a_idx
-            _L.qry_a = make_inner_qry("a",input_a,_L)
-            _L.params.a_str_mod = "iter"
-            _L.params.b_str_mod = "iter"
-            _L.params.div_str = "-;"
+            if k.jaro_score>=run_params.min_jaro then
+                k.jaro_score = tostring(k.jaro_score)
+                k.other_matches = cj.encode(k.other_matches)
+                coroutine.yield(k)
+            else
+                -- add result if first pass
+                if not res[k.a_idx] then
+                    res[k.a_idx] = setmetatable(k, {__index=k})
+                    res[k.a_idx] = setmetatable(k, {__index=k})
 
-            for j in run_query(_L.qry_a, _L.qry_b, _L.params) do
+                    local prefix = " OR "
+                    if iter_params[i+1].a_idx_conditions=="" then prefix="" end
+                    iter_params[i+1].a_idx_conditions = iter_params[i+1].a_idx_conditions..prefix..iter_params[i+1].a_uid.."="..k.a_str.." "
 
-                if j.jaro_score>=_L.params.min_jaro then
-                    j.jaro_score = tostring(j.jaro_score)
-                    j.other_matches = cj.encode(j.other_matches)
---                    coroutine.yield(j)
-                else
+                -- if old and new both not exist in the other, go with higher value
+                -- if choice between (lower score but exists entirely inside of match) or higher value, chose lower value
+                -- if old and new both exist in each other, go with higher value
+                elseif
 
-
-                    if j.jaro_score>res[j.a_idx].jaro_score then
-                        res[j.a_idx] = setmetatable(j, {__index=j})
+                    -- if old/new (both not exist) or (both exist), go by score
+                    (not res[k.a_idx].a_in_b and not res[k.a_idx].b_in_a)
+                        or
+                            ( (res[k.a_idx].a_in_b or res[k.a_idx].b_in_a) and
+                               (k.a_str:find(k.b_str) or k.b_str:find(k.a_str) ) )
+                               then
+                        if k.jaro_score>=res[k.a_idx].jaro_score then
+                            if k.jaro_score>res[k.a_idx].jaro_score then
+                                res[k.a_idx] = setmetatable(k, {__index=k})
+                            else
+                                local tmp = cj.encode(k.other_matches)
+                                table.insert(tmp,1+#tmp,k.b_idx)
+                                res[k.a_idx].other_matches = tmp
+                            end
+                            if k.a_str:find(k.b_str) then res[k.a_idx].a_in_b=true end
+                            if k.b_str:find(k.a_str) then res[k.a_idx].b_in_a=true end
+                        end
                     end
 
+                    -- if choice between (lower/inside match) and (higher/no inside match)
+                    if k.jaro_score>=res[k.a_idx].jaro_score then
+
+                        if (not res[k.a_idx].a_in_b or not res[k.a_idx].b_in_a)
+                            and ( k.a_str:find(k.b_str) or k.b_str:find(k.a_str) )
+                                then
+                            res[k.a_idx] = setmetatable(k, {__index=k})
+                            if k.a_str:find(k.b_str) then res[k.a_idx].a_in_b=true end
+                            if k.b_str:find(k.a_str) then res[k.a_idx].b_in_a=true end
+                        end
+                    end
                 end
 
-
-
-            end
-            local b
-
-        end
-    end
-
-
-    --input_a.conditions="uid="
-    --_L.qry_a = make_inner_qry("a",input_a,_L)
-    --_L.qry_b = make_inner_qry("b",input_b,_L)
-    func_defaults.a_str_mod="iter"
-    _L.params = func_defaults
-
-    for r in pairs(res) do
-        input_a.conditions="uid=" .. res[r].a_idx
-        _L.qry_a = make_inner_qry("a",input_a,_L)
-
-        for k in run_query(_L.qry_a, _L.qry_b, _L.params) do
-            if k.jaro_score<_L.params.min_jaro then
-                res[k.a_idx] = setmetatable(k, {__index=k})
+            if #iter_params>=n+1 then
+                coroutine.yield( iter_rules(res,iter_params, n+1) )
             else
-                k.jaro_score = tostring(k.jaro_score)
-                k.other_matches=cj.encode(k.other_matches)
-                coroutine.yield(k)
+                coroutine.yield( res )
             end
+
         end
+
     end
 
+    iter_rules({},_L.params,1)
 
 --    return "done"
     

@@ -4,6 +4,7 @@
 -- Time: 10:05 PM
 --
 --module("string_matching", package.seeall)
+package.loaded.string_utils = nil
 package.loaded.string_matching = nil
 package.loaded.utility = nil
 
@@ -13,7 +14,11 @@ round = util.round
 --cjson_encode = util.cjson_encode --only produces output when verbose=true
 cj = require "cjson"
 local str_util = require"string_utils"
-split_str_with_div = str_util.split_gen
+--split_str_with_div = str_util.split_gen
+split_str_with_div = str_util.splitter
+local tbl_utils = require"tbl_utils"
+--split_str_with_div = str_util.split_gen
+meta_t = tbl_utils.meta()
 
 local u = {}
 
@@ -235,29 +240,6 @@ function u.perm_jaro(t)
         return  sep_tbl
     end
 
-    local split_str_with_div = function (str,div)
-
-        local str_parts = {}
-        local i,next_match = 1,0,0
-        while true do
-            next_match = str:find(div,i,true)
-            if not next_match then
-                if not str_parts then
-                    table.insert(str_parts,1+#str_parts,str)
-                else
-                    table.insert(str_parts,1+#str_parts,str:sub(i))
-                end
-                break
-            else
-                table.insert(str_parts,1+#str_parts,str:sub(i,next_match-1))
-                i = next_match + #div
-            end
-            if i>=#str then break end
-        end
-        return str_parts
-
-    end
-
     local split_str_with_div_tbl = function (str,div_tbl)
 
         local str_parts = {str}
@@ -383,8 +365,8 @@ function u.perm_jaro(t)
         a_str_mod =   function(in_str) return pairs({in_str}) end
     end
 
-    if t.b_str_mod=="iter" then b_str_mod = pairs 
-    elseif t.b_str_mod=="perm" then b_str_mod = t.p.perm 
+    if t.b_str_mod=="iter" then b_str_mod = b_iter 
+    elseif t.b_str_mod=="perm" then b_str_mod = b_perm
     elseif not t.b_str_mod or t.b_str_mod=="norm" then
         b_str = _normalize(b_str)
     else
@@ -434,7 +416,15 @@ function u.iter_jaro(qry_a,qry_b,params)
         local iter_res,return_res = {},{}
         local new_j_score
         local cnt = 0
-        for b_row in _L.qry_b:rows{_L.b_q_offset,_L.b_q_lim} do
+        local t = {}
+        for v in _L.match_conditions:gmatch("a%.([^=%s%(%)]+)") do 
+            t[#t+1] = _L[v]
+        end
+
+        t[#t+1] = _L.b_q_offset
+        t[#t+1] = _L.b_q_lim
+
+        for b_row in _L.qry_b:rows(t) do
             _L.i2,_L.s2 = b_row.b_idx,b_row.b_str
             if _L.a_str_mod or _L.b_str_mod then
                 iter_res = _L.perm_jaro( _L )
@@ -444,7 +434,6 @@ function u.iter_jaro(qry_a,qry_b,params)
                 iter_res.b_str = _L.s2
                 iter_res.j_score = new_j_score
             end
-
 
             --if new_j_score and new_j_score>0 then
             if iter_res.j_score and iter_res.j_score>_L.j_score then
@@ -467,42 +456,59 @@ function u.iter_jaro(qry_a,qry_b,params)
     local process_a_rows = function (_L)
         local cnt = 0
         _L.a_rows = {}
+        local split_res_with_alias = split_str_with_div(_L.a_related_cols,",")
+        local related_cols={}
+        for _,v in pairs( split_res_with_alias ) do
+            local res_and_alias = split_str_with_div( v, " ")
+            if not res_and_alias[2] then 
+                table.insert(related_cols,1+#related_cols,res_and_alias[1])
+            else
+                table.insert(related_cols,1+#related_cols,res_and_alias[2])
+            end
+        end
+        
         for a_row in _L.qry_a:rows{_L.a_q_offset,_L.a_q_lim} do
-            table.insert(_L.a_rows,{i1=a_row.a_idx,s1=a_row.a_str,j_score=0})
+            local t = {i1=a_row.a_idx,
+                        s1=a_row.a_str,
+                        j_score=0,
+                        div_line=a_row.div_line}
+            for i,v in ipairs( related_cols ) do
+                t[v] = a_row[v]
+            end
+            table.insert(_L.a_rows,t)
             cnt = cnt + 1
         end
         for _,a_row in ipairs(_L.a_rows) do
-            _L.i1,_L.s1 = a_row.i1,a_row.s1
-            _L.j_score = a_row.j_score
+            for k,v in pairs(a_row) do
+                _L[k] = v
+            end
+--            local x = meta_t.union(_L,a_row)
+--            setmetatable(x,{__index=_L})
+--            _L = x
             
             --_L.prof.start()
             process_b_rows(_L)
             --_L.prof.stop()
 
-            if _L.caller then
-                if _L.caller:lower()=="lua" then
-                    coroutine.yield{ 
-                      a_idx=_L.i1,
-                      a_str=_L.s1,
-                      a_match=_L.res_m1,
-                      jaro_score=_L.j_score,
-                      b_match=_L.res_m2,
-                      b_str=_L.res_s2,
-                      b_idx=_L.res_i2,
-                      other_matches=_L.other_matches
-                      }
-                end
-            else
-                coroutine.yield{ 
-                  a_idx=_L.i1, 
+            local t = { 
+                  a_idx=_L.i1,
                   a_str=_L.s1,
                   a_match=_L.res_m1,
-                  jaro_score=tostring(_L.j_score),
+                  jaro_score=_L.j_score,
                   b_match=_L.res_m2,
-                  b_str=_L.res_s2, 
-                  b_idx=_L.res_i2, 
-                  other_matches=cj.encode(_L.other_matches) 
+                  b_str=_L.res_s2,
+                  b_idx=_L.res_i2,
+                  other_matches=_L.other_matches
                   }
+
+            if _L.caller and _L.caller:lower()=="lua" then
+                t.jaro_score=tostring(t.jaro_score)
+                t.other_matches=cj.encode(t.other_matches) 
+                coroutine.yield(t)
+            else
+                t.jaro_score=tostring(t.jaro_score)
+                t.other_matches=cj.encode(t.other_matches) 
+                coroutine.yield(t)
             end
                 
         end
@@ -527,17 +533,46 @@ function u.iter_jaro(qry_a,qry_b,params)
         _L.a_q_lim = _L.qry_max
         _L.a_q_offset,_L.b_q_offset = 0,0
 
-        local _qry_a = [[SELECT a_str::text,a_idx::text
+        local _qry_a = [[SELECT pllua_f.*
                          FROM (]].._L.orig_qry_a..[[) pllua_f
                          ORDER BY pllua_f.a_idx ASC
                          OFFSET $1 LIMIT $2;]]
         _L.qry_a = server.prepare(_qry_a, {"int4","int4"}):save()
 
-        local _qry_b = [[SELECT b_str::text,b_idx::text
-                         FROM (]].._L.orig_qry_b..[[) pllua_f
+        if _L.match_conditions and _L.match_conditions~="" then
+            -- put "b" var first (due to some pllua bug)
+            _L.match_conditions = _L.match_conditions:gsub('(a%.[^=%s%(%)]+)=(b%.[^=%s%(%)]+)','%2=%1')
+            
+            local sub_var_types = {}
+            local new_str = " WHERE ".._L.match_conditions
+            for v in new_str:gmatch("(b%.)[^=%s%(%)]+") do                 
+                new_str = new_str:gsub(v,"pllua_f.")
+            end
+            local pt = 1
+            for v in new_str:gmatch("(a%.[^=%s%(%)]+)") do                 
+                new_str = new_str:gsub(v,"$"..tostring(pt),1)
+                pt = pt + 1
+                table.insert(sub_var_types,1+#sub_var_types,"text")
+            end
+            
+            local segmentation_str = " OFFSET $"..tostring(pt).." LIMIT $"..tostring(pt+1).." "
+            local _qry_b = " SELECT pllua_f.* "..
+                         " FROM (".._L.orig_qry_b.." ) pllua_f "..
+                         new_str..
+                         " ORDER BY pllua_f.b_idx ASC "..
+                         segmentation_str..";"
+            table.insert(sub_var_types,1+#sub_var_types,"int4")
+            table.insert(sub_var_types,1+#sub_var_types,"int4")
+
+            _L.qry_b = server.prepare(_qry_b, sub_var_types):save()
+        else
+            local _qry_b = [[SELECT pllua_f.*
+                         FROM (]].._L.orig_qry_b..[[ ) pllua_f
                          ORDER BY pllua_f.b_idx ASC
                          OFFSET $1 LIMIT $2;]]
-        _L.qry_b = server.prepare(_qry_b, {"int4","int4"}):save()
+            _L.qry_b = server.prepare(_qry_b, {"int4","int4"}):save()
+        end
+        
         return _L
 
     end
@@ -571,7 +606,8 @@ function u.iter_jaro(qry_a,qry_b,params)
         if tostring(v):lower()=="true" then params[k]=true end
     end
     if params.numeric_lcs==nil then params.numeric_lcs=false end
-    _L = setmetatable(_L, {__index = params})
+    if params.match_conditions==nil then params.match_conditions="" end
+    setmetatable(_L, {__index = params})
     if params.a_str_mod or params.b_str_mod then 
         if params.a_str_mod~="" or params.b_str_mod~="" then
           _L.p = require"permutations"
@@ -601,8 +637,8 @@ end
 
 function u.manage_iter_jaro(input_params)
 
-    package.loaded.mobdebug = nil
-    require('mobdebug').start("10.0.1.53")
+    --package.loaded.mobdebug = nil
+    --require('mobdebug').start("10.0.1.53")
 
     local decode_json = function(_input)
         assert(type(_input)=="string", "expected string input for decoding json into table")

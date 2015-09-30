@@ -51,13 +51,21 @@ function u.splitter (_str,div)
         local next_match = _str:find(div,i,true)
         if not next_match then
             if not str_parts then
-                table.insert(str_parts,1+#str_parts,_str)
+                if _str and _str~="" then
+                    table.insert(str_parts,1+#str_parts,_str)
+                end
             else
-                table.insert(str_parts,1+#str_parts,_str:sub(i))
+                local t = _str:sub(i)
+                if t and t~="" then
+                    table.insert(str_parts,1+#str_parts,t)
+                end
             end
             break
         else
-            table.insert(str_parts,1+#str_parts,_str:sub(i,next_match-1))
+            local t = _str:sub(i,next_match-1)
+            if t and t~="" then
+                table.insert(str_parts,1+#str_parts,t)
+            end
             i = next_match + #div
         end
         if i>=#_str then break end

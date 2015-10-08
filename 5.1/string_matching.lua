@@ -482,14 +482,23 @@ function u.iter_jaro(qry_a,qry_b,params)
             for k,v in pairs(a_row) do
                 _L[k] = v
             end
---            local x = meta_t.union(_L,a_row)
---            setmetatable(x,{__index=_L})
---            _L = x
-            
+
+            _L.res_i2,_L.res_s2 = "",""
+            _L.res_m1,_L.res_m2 = "",""
+            _L.other_matches = {}
+
             --_L.prof.start()
             process_b_rows(_L)
             --_L.prof.stop()
 
+
+
+--            if _L.res_m1==nil then _L.res_m1="" end
+--            if not _L.res_m2 then _L.res_m2="" end
+--            if not _L.res_s2 then _L.res_s2="" end
+--            if not _L.res_i2 then _L.res_i2="" end
+--            if not _L.other_matches then _L.other_matches="" end
+            
             local t = { 
                   a_idx=_L.i1,
                   a_str=_L.s1,
@@ -501,9 +510,8 @@ function u.iter_jaro(qry_a,qry_b,params)
                   other_matches=_L.other_matches
                   }
 
-            if _L.caller and _L.caller:lower()=="lua" then
-                t.jaro_score=tostring(t.jaro_score)
-                t.other_matches=cj.encode(t.other_matches) 
+            if _L.caller and _L.caller:lower()=="lua"
+                and not _L.first_match_only then 
                 coroutine.yield(t)
             else
                 t.jaro_score=tostring(t.jaro_score)
@@ -637,8 +645,8 @@ end
 
 function u.manage_iter_jaro(input_params)
 
-    --package.loaded.mobdebug = nil
-    --require('mobdebug').start("10.0.1.53")
+    package.loaded.mobdebug = nil
+    require('mobdebug').start("10.0.1.53")
 
     local decode_json = function(_input)
         assert(type(_input)=="string", "expected string input for decoding json into table")
@@ -774,7 +782,7 @@ function u.manage_iter_jaro(input_params)
                             "'"..r.b_idx.."'::INTEGER b_idx, "..
                             "'"..r.other_matches.."'::TEXT[] other_matches "..
                         " )"..
-                        " UPDATE "..params.a_tbl .." a "..
+                        " UPDATE "..params.a_tbl .." old "..
                         " SET "
 
         for k,v in pairs(params.update_mapping) do
@@ -825,10 +833,12 @@ function u.manage_iter_jaro(input_params)
 
         for k in run_query(_L.qry_a, _L.qry_b, run_params) do
 
-            if k.jaro_score>=run_params.min_jaro then
+            if tonumber(k.jaro_score)>=run_params.min_jaro then
                 k.jaro_score = tostring(k.jaro_score)
                 k.other_matches = cj.encode(k.other_matches)
-                if run_params.do_update or run_params.update_conditions then
+                if (run_params.do_update or run_params.update_conditions) 
+                  and (run_params.do_update~="" or run_params.update_conditions~="")
+                    then
                     u.update_query(k,run_params)
                 else
                     coroutine.yield(k)
@@ -894,7 +904,9 @@ function u.manage_iter_jaro(input_params)
             if #iter_params>=n+1 then
                 coroutine.yield( u.iter_rules(u,res,iter_params, n+1) )
             else
-                if run_params.do_update or run_params.update_conditions then
+                if (run_params.do_update or run_params.update_conditions) 
+                  and (run_params.do_update~="" or run_params.update_conditions~="")
+                    then
                     for _,v in ipairs(res) do
                         u.update_query(v,run_params)
                     end

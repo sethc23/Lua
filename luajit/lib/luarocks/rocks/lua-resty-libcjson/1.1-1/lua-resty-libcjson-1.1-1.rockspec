@@ -1,8 +1,8 @@
 package = "lua-resty-libcjson"
-version = "1.0-1"
+version = "1.1-1"
 source = {
     url = "git://github.com/bungle/lua-resty-libcjson.git",
-    branch = "v1.0"
+    branch = "v1.1"
 }
 description = {
     summary = "LuaJIT FFI-based cJSON library (tested with OpenResty too).",

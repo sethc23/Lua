@@ -1,19 +1,13 @@
 local insert
-do
-  local _obj_0 = table
-  insert = _obj_0.insert
-end
+insert = table.insert
 local tcp
-do
-  local _obj_0 = require("pgmoon.socket")
-  tcp = _obj_0.tcp
-end
+tcp = require("pgmoon.socket").tcp
 local rshift, lshift, band
 do
   local _obj_0 = require("bit")
   rshift, lshift, band = _obj_0.rshift, _obj_0.lshift, _obj_0.band
 end
-local VERSION = "1.1.1"
+local VERSION = "1.2.0"
 local _len
 _len = function(thing, t)
   if t == nil then
@@ -90,15 +84,31 @@ local ERROR_TYPES = flipped({
 })
 local PG_TYPES = {
   [16] = "boolean",
+  [17] = "bytea",
   [20] = "number",
   [21] = "number",
   [23] = "number",
   [700] = "number",
   [701] = "number",
   [1700] = "number",
+  [1000] = "array_boolean",
+  [1005] = "array_number",
+  [1007] = "array_number",
+  [1016] = "array_number",
+  [1021] = "array_number",
+  [1022] = "array_number",
+  [1231] = "array_number",
+  [1009] = "array_string",
+  [1015] = "array_string",
+  [1002] = "array_string",
+  [1014] = "array_string",
   [114] = "json"
 }
 local NULL = "\0"
+local tobool
+tobool = function(str)
+  return str == "t"
+end
 local Postgres
 do
   local _base_0 = {
@@ -113,6 +123,24 @@ do
       json = function(self, val, name)
         local json = require("cjson")
         return json.decode(val)
+      end,
+      bytea = function(self, val, name)
+        return self:decode_bytea(val)
+      end,
+      array_boolean = function(self, val, name)
+        local decode_array
+        decode_array = require("pgmoon.arrays").decode_array
+        return decode_array(val, tobool)
+      end,
+      array_number = function(self, val, name)
+        local decode_array
+        decode_array = require("pgmoon.arrays").decode_array
+        return decode_array(val, tonumber)
+      end,
+      array_string = function(self, val, name)
+        local decode_array
+        decode_array = require("pgmoon.arrays").decode_array
+        return decode_array(val)
       end
     },
     connect = function(self)
@@ -172,10 +200,7 @@ do
     end,
     md5_auth = function(self, msg)
       local md5
-      do
-        local _obj_0 = require("pgmoon.crypto")
-        md5 = _obj_0.md5
-      end
+      md5 = require("pgmoon.crypto").md5
       local salt = msg:sub(5, 8)
       assert(self.password, "missing password, required for connect")
       self:send_message(MSG_TYPE.password, {
@@ -470,6 +495,22 @@ do
       else
         return error("don't know how to encode " .. tostring(bytes) .. " byte(s)")
       end
+    end,
+    decode_bytea = function(self, str)
+      if str:sub(1, 2) == '\\x' then
+        return str:sub(3):gsub('..', function(hex)
+          return string.char(tonumber(hex, 16))
+        end)
+      else
+        return str:gsub('\\(%d%d%d)', function(oct)
+          return string.char(tonumber(oct, 8))
+        end)
+      end
+    end,
+    encode_bytea = function(self, str)
+      return string.format("E'\\\\x%s'", str:gsub('.', function(byte)
+        return string.format('%02x', string.byte(byte))
+      end))
     end,
     escape_identifier = function(self, ident)
       return '"' .. (tostring(ident):gsub('"', '""')) .. '"'

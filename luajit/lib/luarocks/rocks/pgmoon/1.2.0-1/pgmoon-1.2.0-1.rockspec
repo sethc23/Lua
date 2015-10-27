@@ -1,9 +1,9 @@
 package = "pgmoon"
-version = "1.1.1-1"
+version = "1.2.0-1"
 
 source = {
   url = "git://github.com/leafo/pgmoon.git",
-  branch = "v1.1.1"
+  branch = "v1.2.0"
 }
 
 description = {
@@ -16,12 +16,15 @@ description = {
 
 dependencies = {
   "lua >= 5.1",
+  "luabitop",
+  "lpeg",
 }
 
 build = {
   type = "builtin",
   modules = {
     ["pgmoon"] = "pgmoon/init.lua",
+    ["pgmoon.arrays"] = "pgmoon/arrays.lua",
     ["pgmoon.crypto"] = "pgmoon/crypto.lua",
     ["pgmoon.socket"] = "pgmoon/socket.lua",
   },

@@ -1,9 +1,9 @@
 -- sites-available/lua_files/queue_file_via_rmq.lua
 module("queue_file_via_rmq", package.seeall)
 
-local strlen =  string.len
-local cjson = require "cjson"
-local rabbitmq = require "resty.rabbitmqstomp"
+local strlen                =   string.len
+local cjson                 =   require "cjson"
+local rabbitmq              =   require "resty.rabbitmqstomp"
 
 local r                     =   {}
 local args                  =   ngx.req.get_uri_args()

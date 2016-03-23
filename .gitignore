@@ -6,3 +6,6 @@ luajit/bin/
 *.a
 *.pc
 *.*~
+luajit/lib
+luajit/include
+.DS_Store

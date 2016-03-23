@@ -645,8 +645,8 @@ end
 
 function u.manage_iter_jaro(input_params)
 
-    package.loaded.mobdebug = nil
-    require('mobdebug').start("10.0.1.53")
+--    package.loaded.mobdebug = nil
+--    require('mobdebug').start("10.0.1.53")
 
     local decode_json = function(_input)
         assert(type(_input)=="string", "expected string input for decoding json into table")

@@ -7,8 +7,11 @@
 --package.loaded.tbl_utils = nil
 
 local u = {}
-u.tbl = require "tbl_utils"
+--u.tbl = require "tbl_utils"
 
+function u.log(msg)
+    ngx.log(ngx.WARN,msg)
+end
 
 function u.round(n)
     return math.floor((math.floor(n*2) + 1)/2)
@@ -31,7 +34,7 @@ function u.to_log(msg, verbose)
         for i,v in ipairs(msg) do
             if v then t = t..v end
         end
-        log(t)
+        u.log(t)
     end
 end
 
@@ -54,8 +57,15 @@ end
 
 function u.log_env ()
     for n in pairs(_G) do
-        log(n)
+        u.log(n)
     end
+end
+
+function u.mobdebug()
+    package.loaded.mobdebug = nil
+    -- from mbp2:  ssh -nN -R 8172:localhost:8172 ub2
+    local m = require('mobdebug').start("localhost")
+    return
 end
 
 function u.debug(tbl_in)
@@ -91,34 +101,34 @@ function u.debug(tbl_in)
         if not tbl_in.out_file then tbl_in.out_file="/tmp/tmpfile" end
         os.execute("echo '"..msg.."' >> "..tbl_in.out_file)
     else
-        log(msg)
+        u.log(msg)
     end
 end
 
 function u.show (_var,_how)
     if _var=="globals" then
         for n in pairs(_G) do
-            if _how=="log" then log(n)
+            if _how=="log" then u.log(n)
             elseif _how=="print" then print(n) end
         end
     end
     if _var=="packages" then
         for k,v in pairs(package.loaded) do
-            if _how=="log" then log(k)
+            if _how=="log" then u.log(k)
             elseif _how=="print" then print(k) end
         end
     end
-    if _var=="path" then
-        if _how=="log" then log(package.path)
+    if _var=="packages_path" then
+        if _how=="log" then u.log(package.path)
         elseif _how=="print" then print(package.path) end
     end
     if _var=="pwd" then
-        if _how=="log" then log(os.execute("echo `pwd`"))
+        if _how=="log" then u.log(os.execute("echo `pwd`"))
         elseif _how=="print" then print(os.execute("echo `pwd`"))
         end
     end
     if _var=="datetime" then
-        if _how=="log" then log(os.execute("echo `date --utc`"))
+        if _how=="log" then u.log(os.execute("echo `date --utc`"))
         elseif _how=="print" then print(os.execute("echo `date --utc`"))
         end
     end

@@ -1,13 +1,12 @@
+local socket = require("pgmoon.socket")
 local insert
 insert = table.insert
-local tcp
-tcp = require("pgmoon.socket").tcp
 local rshift, lshift, band
 do
   local _obj_0 = require("bit")
   rshift, lshift, band = _obj_0.rshift, _obj_0.lshift, _obj_0.band
 end
-local VERSION = "1.2.0"
+local VERSION = "1.4.0"
 local _len
 _len = function(thing, t)
   if t == nil then
@@ -102,7 +101,8 @@ local PG_TYPES = {
   [1015] = "array_string",
   [1002] = "array_string",
   [1014] = "array_string",
-  [114] = "json"
+  [114] = "json",
+  [3802] = "json"
 }
 local NULL = "\0"
 local tobool
@@ -111,6 +111,7 @@ tobool = function(str)
 end
 local Postgres
 do
+  local _class_0
   local _base_0 = {
     convert_null = false,
     NULL = {
@@ -121,8 +122,9 @@ do
     port = "5432",
     type_deserializers = {
       json = function(self, val, name)
-        local json = require("cjson")
-        return json.decode(val)
+        local decode_json
+        decode_json = require("pgmoon.json").decode_json
+        return decode_json(val)
       end,
       bytea = function(self, val, name)
         return self:decode_bytea(val)
@@ -144,7 +146,7 @@ do
       end
     },
     connect = function(self)
-      self.sock = tcp()
+      self.sock = socket.new()
       local ok, err = self.sock:connect(self.host, self.port)
       if not (ok) then
         return nil, err
@@ -192,11 +194,21 @@ do
       local _exp_0 = auth_type
       if 0 == _exp_0 then
         return true
+      elseif 3 == _exp_0 then
+        return self:cleartext_auth(msg)
       elseif 5 == _exp_0 then
         return self:md5_auth(msg)
       else
         return error("don't know how to auth: " .. tostring(auth_type))
       end
+    end,
+    cleartext_auth = function(self, msg)
+      assert(self.password, "missing password, required for connect")
+      self:send_message(MSG_TYPE.password, {
+        self.password,
+        NULL
+      })
+      return self:check_auth()
     end,
     md5_auth = function(self, msg)
       local md5
@@ -205,10 +217,13 @@ do
       assert(self.password, "missing password, required for connect")
       self:send_message(MSG_TYPE.password, {
         "md5",
-        md5(md5(self.password .. self.user) .. salt)
+        md5(md5(self.password .. self.user) .. salt),
+        NULL
       })
-      local t
-      t, msg = self:receive_message()
+      return self:check_auth()
+    end,
+    check_auth = function(self)
+      local t, msg = self:receive_message()
       if not (t) then
         return nil, msg
       end
@@ -218,7 +233,7 @@ do
       elseif MSG_TYPE.auth == _exp_0 then
         return true
       else
-        return error("unknown response from md5 auth: " .. tostring(auth_type))
+        return error("unknown response from auth")
       end
     end,
     query = function(self, q)
@@ -531,7 +546,7 @@ do
     end
   }
   _base_0.__index = _base_0
-  local _class_0 = setmetatable({
+  _class_0 = setmetatable({
     __init = function(self, opts)
       if opts then
         self.user = opts.user

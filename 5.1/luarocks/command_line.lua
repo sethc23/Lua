@@ -31,11 +31,16 @@ end
 local function replace_tree(flags, args, tree)
    tree = dir.normalize(tree)
    flags["tree"] = tree
+   local added = false
    for i = 1, #args do
       if args[i]:match("%-%-tree=") then
          args[i] = "--tree="..tree
+         added = true
          break
       end
+   end
+   if not added then
+      args[#args + 1] = "--tree="..tree
    end
    path.use_tree(tree)
 end
@@ -113,12 +118,6 @@ function command_line.run_command(...)
       end
    end
    command = command:gsub("-", "_")
-
-   if flags["extensions"] then
-      cfg.use_extensions = true
-      local type_check = require("luarocks.type_check")
-      type_check.load_extensions()
-   end
    
    if cfg.local_by_default then
       flags["local"] = true

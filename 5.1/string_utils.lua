@@ -68,7 +68,14 @@ function u.splitter (_str,div)
             end
             i = next_match + #div
         end
-        if i>=#_str then break end
+        if i>=#_str then 
+          local matched_end_pt = next_match-1 + #div
+          if matched_end_pt<#_str then
+              local t = _str:sub(matched_end_pt+1,#_str)
+              table.insert(str_parts,1+#str_parts,t)
+          end
+          break 
+        end
     end
     return str_parts
 end

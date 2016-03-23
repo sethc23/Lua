@@ -28,18 +28,7 @@ local start_upload  =   false
 local stop_upload   =   false
 local uploaded      =   false
 
-
-function os.capture(cmd, raw)
-    local f = assert(io.popen(cmd, 'r'))
-    local s = assert(f:read('*a'))
-    f:close()
-    if raw then return s end
-    s = string.gsub(s, '^%s+', '')
-    s = string.gsub(s, '%s+$', '')
-    s = string.gsub(s, '[\n\r]+', ' ')
-    return s
-end
-
+local u             =   require"utility"
 
 while true do
     local typ, res, err = form:read()
@@ -151,7 +140,7 @@ else
     local cmd = "/usr/bin/python3 "..SERV_HOME.."/encryption/run_encryption.py convert "..file_name.." "..save_path.." "..sha1_sum.." "..md5_sum
     --ngx.log(ngx.WARN,"CMD:---->>"..cmd.."<<----")
 
-    local res = os.capture(cmd, True)
+    local res = u.os_capture(cmd, True)
     --ngx.log(ngx.WARN,"RES:---->>"..res.."<<----")
 
     ngx.var.new_file = save_path:gsub("(.*)/([^/]+)$","%2")

@@ -6,6 +6,7 @@
 --module("tbl_utils", package.seeall)
 
 local _tbl = {}
+cj = require"cjson"
 
 function _tbl.val_to_str ( v )
   if "string" == type( v ) then
@@ -29,18 +30,19 @@ function _tbl.key_to_str ( k )
 end
 
 function _tbl.tostring( tbl )
-  local result, done = {}, {}
-  for k, v in ipairs( tbl ) do
-    table.insert( result, _tbl.val_to_str( v ) )
-    done[ k ] = true
-  end
-  for k, v in pairs( tbl ) do
-    if not done[ k ] then
-      table.insert( result,
-        _tbl.key_to_str( k ) .. "=" .. _tbl.val_to_str( v ) )
+    local result, done = {}, {}
+        for k, v in ipairs( tbl ) do
+            table.insert( result, _tbl.val_to_str( v ) )
+            done[ k ] = true
+        end
+    for k, v in pairs( tbl ) do
+        if not done[ k ] then
+            table.insert( result,
+                _tbl.key_to_str( k ) .. "=" .. _tbl.val_to_str( v ) )
+        end
     end
-  end
-  return "{" .. table.concat( result, "," ) .. "}"
+    local res = cj.encode(table.concat( result, "," ))
+    return "{" .. res .. "}"
 end
 
 function _tbl.table_invert(t)
@@ -98,8 +100,8 @@ function _tbl.meta()
         local s = "{"
         local sep = ""
         for e in pairs(set) do
-        s = s .. sep .. e
-        sep = ", "
+            s = s .. sep .. e
+            sep = ", "
         end
         return s .. "}"
     end

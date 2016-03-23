@@ -1,23 +1,43 @@
+-- pgsql_system API
+--[[    
 
---[[    pgsql_system API
+    /sys/<action>/<table_name>/<col_name>/<col_val>/[<key>=<value]
 
- /sys/<action>/<table_name>/<col_name>/<col_val>/[<key>=<value]
+    methods: "get" or "post"
 
-methods: "get" or "post"
-
-examples:
-
-    GET /sys/servers
-    
-    GET /sys/servers/tag/ub2
-
-    POST /sys/servers/tag/ub2?local_addr=10.0.0.52&ext_addr=x.x.x.x
+    TESTS:
 
 
+        "GET"      curl -s -X "GET" localhost:9999/sys/<...> | jq '.'
+
+    [X]  GET /sys/servers
+    [X]  GET /sys/servers/tag
+    [X]  GET /sys/servers/tag/BUILD
+    [X]  GET /sys/servers/local_port/9092 
+    [X]  GET /sys/servers/tag/ub2
+    [X]  GET /sys/servers/tag/.scripts
+
+
+        "POST"     curl -s -X "POST" localhost:9999/sys/<...> | jq '.'
+
+    curl -H "Content-Type: application/json" -X POST -d \
+        '{"test_text":"ok","test_bool":true}' http://localhost:9999/sys/servers
+        --> {"errcode":0,"affected_rows":13}
+    curl -H "Content-Type: application/json" -X POST -d \
+        '{"test_text":"N","test_bool":true}' http://localhost:9999/sys/servers/
+        --> {"errcode":0,"affected_rows":13}
+    curl -H "Content-Type: application/json" -X POST -d \
+        '{"test_text":"ok","test_bool":true}' http://localhost:9999/sys/servers/tag
+        --> errors out
+    curl -H "Content-Type: application/json" -X POST -d \
+        '{"test_text":"ok","test_bool":true}' http://localhost:9999/sys/servers/tag/ubx
+        --> {"errcode":0}
+    curl -H "Content-Type: application/json" -X POST -d \
+        '{"test_text":"ok","test_bool":true}' http://localhost:9999/sys/servers/tag/ub2
+        --> {"errcode":0,"affected_rows":1}
 --]]
 
-
--- sites-available/lua_files/pgsql_system.lua
+-- lua_files/pgsql_system.lua
 module("pgsql_system", package.seeall)
 package.loaded.string_utils=nil
 str_u = require"string_utils"
@@ -44,7 +64,7 @@ if (not req_method=="GET" and not req_method=="POST") then ngx.exit(ngx.HTTP_MET
 
 local uri_split = str_u.splitter(ngx.var.uri,"/")
 table.remove(uri_split,1)
-ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n uri :>>\n"      ..tostring(ngx.var.uri)..    "\n<< ")
+-- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n uri :>>\n"      ..tostring(ngx.var.uri)..    "\n<< ")
 if #uri_split==0 then ngx.exit(ngx.HTTP_NOT_FOUND) end
 
 local update,qry_tbl = false,""
@@ -56,15 +76,21 @@ else
     update=false
     qry_tbl=table.remove(uri_split,1)
 end
-ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n qry_tbl :>>\n"      ..tostring(qry_tbl)..    "\n<< ")
+-- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n qry_tbl :>>\n"      ..tostring(qry_tbl)..    "\n<< ")
 if #qry_tbl==0 then ngx.exit(ngx.HTTP_NOT_FOUND) end
---    curl -s -X "GET" localhost:9999/ <...> | jq '.'
--- [X]  GET /sys/servers
--- [X]  GET /sys/servers/tag
--- [X]  GET /sys/servers/tag/BUILD (checking letters)
--- [X]  GET /sys/servers/local_port/9092 (checking numbers)
--- [X]  GET /sys/servers/tag/ub2 (checking letters,numbers)
--- [ ]  POST /sys/servers/tag/ub2?local_addr=10.0.0.52&ext_addr=x.x.x.x 
+
+--require('mobdebug').start("0.0.0.0")
+
+local t,post_args                 =   {},{}
+if req_method=='POST' then
+    ngx.req.read_body()
+    t                   =   ngx.req.get_post_args()
+    for k,v in pairs(t) do post_args = cjson.decode(k) break end
+    -- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n post_args :>>\n"      ..cjson.encode({type(post_args),post_args})..    "\n<< ")
+    local arg_count = 0
+    for k,v in pairs(post_args) do arg_count = arg_count+1 end
+    if arg_count==0 then ngx.exit(ngx.HTTP_METHOD_NOT_IMPLEMENTED) end
+end
 
 --[[
     local h                     =   ngx.req.raw_header()
@@ -83,7 +109,9 @@ if #qry_tbl==0 then ngx.exit(ngx.HTTP_NOT_FOUND) end
 
 local cols,cond = "",""
 if #uri_split==0 then cols = "*"
-elseif #uri_split==1 then cols = uri_split[1]
+elseif #uri_split==1 then 
+    if req_method=="POST" then ngx.exit(ngx.HTTP_NOT_FOUND) end
+    cols = uri_split[1]
 elseif #uri_split==2 then 
     cols = "*"
     if uri_split[2]:match('^%d+$') then
@@ -94,47 +122,23 @@ elseif #uri_split==2 then
 else ngx.exit(ngx.HTTP_NOT_FOUND)
 end
 
---require('mobdebug').start("0.0.0.0")
-
 local qry,q_res_status,q_res_body = "","",""
 if req_method=="GET" then
-
     qry = ngx.escape_uri( "SELECT "..cols.." FROM "..qry_tbl..cond..";" )
     _,q_res_body = make_query(qry)
-
-
-    
-    
-    
-
-    -- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n q_res_body :>>\n"      ..cjson.(q_res_body)[1].res..    "\n<< ")
-
-    -- if cjson.decode(q_res_body)[1].res=="nothing updated" then
-    --     qry = "update yelp set trigger_step='geom_from_coord_failed' where uid = "..r['idx']..";"
-    --     make_query(qry)
-    -- end
-
     ngx.say(q_res_body)
-
---  TEST SCRIPT
---    if tag:find("MN.new_address.parsed.geom.failed.new_address.parsed") then
---
---        q = [[  select z_update_with_geom_from_parsed(   ]]..r['idx']..[[, ']]..r['table']..[['::text,
---                                                        ']]..r['uid_col']..[['::text) res]]
---        ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n Q:>>\n\n"..q.."\n\n<< ")
---
---        tag = "PAUSING"
---        q = "update "..r['table'].." set trigger_step = '"..tag.."' where "..r['uid_col'].."="..r['idx']
---        make_query(q)
---        ngx.exit(ngx.OK)
---    end
-
-
+elseif req_method=="POST" then
+    qry = "UPDATE "..qry_tbl.." SET "
+    for k,v in pairs(post_args) do
+        qry = qry .. k .. [[=']] .. tostring(v) .. [[', ]]
+    end
+    qry = qry:sub(1,#qry-qry:reverse():find(',')) .. cond .. [[;]]
+    qry = ngx.escape_uri(qry)
+    _,q_res_body = make_query(qry)
+    ngx.say(q_res_body)
 end
 
-ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n\nEND\n\n :>>  <<  ")
-
+-- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n\nEND\n\n :>>  <<  ")
 -- require('mobdebug').start("10.0.0.53")
-
 
 ngx.exit(ngx.OK)

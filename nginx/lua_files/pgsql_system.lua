@@ -40,11 +40,22 @@
 -- lua_files/pgsql_system.lua
 module("pgsql_system", package.seeall)
 package.loaded.string_utils=nil
+cjson = require"cjson"
 str_u = require"string_utils"
 
 --ngx.log(ngx.WARN,"-- {pgsql_system.lua}/ : START :>>  <<  ")
 
-local cjson                 =   require "cjson"
+
+function os_capture(cmd, raw)
+    local f = assert(io.popen(cmd, 'r'))
+    local s = assert(f:read('*a'))
+    f:close()
+    if raw then return s end
+    s = string.gsub(s, '^%s+', '')
+    s = string.gsub(s, '%s+$', '')
+    s = string.gsub(s, '[\n\r]+', ' ')
+    return s
+end
 
 function make_query(qry)
     --ngx.log(ngx.WARN,"\n\n\n"..qry.."\n\n\n")
@@ -53,7 +64,7 @@ function make_query(qry)
     local resp                  =   ngx.location.capture(plain_url)
     if resp.status~=200 then
         ngx.log(ngx.WARN,"-- {pgsql_system.lua}/ : pgsql_args :>>"      ..qry..                        "<<  ")
-        ngx.log(ngx.WARN,"-- {pgsql_system.lua}/ : resp :>>"            ..cjson.encode(resp.status)..   "<<  ")
+        ngx.log(ngx.WARN,"-- {pgsql_system.lua}/ : resp :>>"            ..tostring(resp.status)..   "<<  ")
     end
     --ngx.log(ngx.WARN,"-- \n{pgsql_system.lua}/ : \nresp :>>\n"            ..t.res..   "\n\n<<  ")
     return resp.status,resp.body
@@ -65,32 +76,49 @@ if (not req_method=="GET" and not req_method=="POST") then ngx.exit(ngx.HTTP_MET
 local uri_split = str_u.splitter(ngx.var.uri,"/")
 table.remove(uri_split,1)
 -- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n uri :>>\n"      ..tostring(ngx.var.uri)..    "\n<< ")
-if #uri_split==0 then ngx.exit(ngx.HTTP_NOT_FOUND) end
 
-local update,qry_tbl = false,""
-if uri_split[1]=="update" then 
-    update=true
-    table.remove(uri_split,1)
-    qry_tbl=table.remove(uri_split,1)
+if #uri_split==0 then 
+    qry_tbl = nil
 else
-    update=false
-    qry_tbl=table.remove(uri_split,1)
+    qry_tbl = table.remove(uri_split,1)
 end
--- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n qry_tbl :>>\n"      ..tostring(qry_tbl)..    "\n<< ")
-if #qry_tbl==0 then ngx.exit(ngx.HTTP_NOT_FOUND) end
 
---require('mobdebug').start("0.0.0.0")
+
+local cols,cond = "",""
+if #uri_split==0 then cols = "*"
+elseif #uri_split==1 then 
+    if req_method=="POST" then ngx.exit(ngx.HTTP_NOT_FOUND) end
+    cols = uri_split[1]
+elseif #uri_split==2 then 
+    cols = "*"
+    if uri_split[2]:match('^%d+$') then
+        cond = " WHERE "..uri_split[1].."="..uri_split[2]
+    else
+        cond = " WHERE "..uri_split[1]..[[=]]..[[']]..uri_split[2]..[[']]
+    end
+else ngx.exit(ngx.HTTP_NOT_FOUND)
+end
+-- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n cond :>>\n"      ..cond..    "\n<< ")
+
+
 
 local t,post_args                 =   {},{}
 if req_method=='POST' then
     ngx.req.read_body()
-    t                   =   ngx.req.get_post_args()
-    for k,v in pairs(t) do post_args = cjson.decode(k) break end
-    -- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n post_args :>>\n"      ..cjson.encode({type(post_args),post_args})..    "\n<< ")
+    t = ngx.req.get_post_args()
+    for k,v in pairs(t) do 
+        -- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n post_args(k) :>>\n"      ..k..    "\n<< ")
+        post_args = cjson.decode(k) 
+        -- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n post_args :>>\n"      ..cjson.encode({type(post_args),post_args})..    "\n<< ")
+        break 
+    end
+    
     local arg_count = 0
     for k,v in pairs(post_args) do arg_count = arg_count+1 end
     if arg_count==0 then ngx.exit(ngx.HTTP_METHOD_NOT_IMPLEMENTED) end
 end
+
+--require('mobdebug').start("0.0.0.0")
 
 --[[
     local h                     =   ngx.req.raw_header()
@@ -107,26 +135,32 @@ end
     ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \nuri_args :>>\n"    ..cjson.encode(r)..    "\n<< ")
 --]]
 
-local cols,cond = "",""
-if #uri_split==0 then cols = "*"
-elseif #uri_split==1 then 
-    if req_method=="POST" then ngx.exit(ngx.HTTP_NOT_FOUND) end
-    cols = uri_split[1]
-elseif #uri_split==2 then 
-    cols = "*"
-    if uri_split[2]:match('^%d+$') then
-        cond = " WHERE "..uri_split[1].."="..uri_split[2]
-    else
-        cond = " WHERE "..uri_split[1]..[[=]]..[[']]..uri_split[2]..[[']]
-    end
-else ngx.exit(ngx.HTTP_NOT_FOUND)
-end
-
 local qry,q_res_status,q_res_body = "","",""
 if req_method=="GET" then
-    qry = ngx.escape_uri( "SELECT "..cols.." FROM "..qry_tbl..cond..";" )
-    _,q_res_body = make_query(qry)
-    ngx.say(q_res_body)
+    if qry_tbl==nil then
+        qry = [[SELECT pg_class.relname
+                FROM pg_class, pg_attribute, pg_index
+                WHERE pg_class.oid = pg_attribute.attrelid
+                AND pg_class.oid = pg_index.indrelid
+                AND pg_index.indkey[0] = pg_attribute.attnum
+                AND pg_index.indisprimary = 't'
+                AND pg_attribute.attname = 'uid'
+                ORDER BY pg_class.relname ASC;]]
+        qry = qry:gsub('%s%s+'," ")
+        qry = ngx.escape_uri(qry)
+        _,q_res_body = make_query(qry)
+        ngx.say(  os_capture([[echo ']]..q_res_body..[['  | jq -M -c '[.[].relname]' ]])  )
+    else
+        qry = ngx.escape_uri( "SELECT "..cols.." FROM "..qry_tbl..cond..";" )
+        _,q_res_body = make_query(qry)
+        _,t = cols:gsub(",","")
+        if t==0 then
+            ngx.say(  os_capture([[echo ']]..q_res_body..[['  | jq -M -c '[.[].]]..cols..[[]' ]])  )
+        else
+            ngx.say(q_res_body)
+        end
+    end
+    
 elseif req_method=="POST" then
     qry = "UPDATE "..qry_tbl.." SET "
     for k,v in pairs(post_args) do

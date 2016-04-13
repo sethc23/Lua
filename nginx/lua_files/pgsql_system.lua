@@ -1,7 +1,7 @@
 -- pgsql_system API
 --[[    
 
-    /sys/<action>/<table_name>/<col_name>/<col_val>/[<key>=<value]
+    /sys/<table_name>/<col_name>/<col_val>/[<key>=<value]
 
     methods: "get" or "post"
 
@@ -58,7 +58,7 @@ function os_capture(cmd, raw)
 end
 
 function make_query(qry)
-    --ngx.log(ngx.WARN,"\n\n\n"..qry.."\n\n\n")
+    -- ngx.log(ngx.WARN,"\n\n\n"..qry.."\n\n\n")
     local plain_url = '/query?qry='..qry
     -- local enc_url = ngx.escape_uri(plain_url)
     local resp                  =   ngx.location.capture(plain_url)
@@ -66,7 +66,7 @@ function make_query(qry)
         ngx.log(ngx.WARN,"-- {pgsql_system.lua}/ : pgsql_args :>>"      ..qry..                        "<<  ")
         ngx.log(ngx.WARN,"-- {pgsql_system.lua}/ : resp :>>"            ..tostring(resp.status)..   "<<  ")
     end
-    --ngx.log(ngx.WARN,"-- \n{pgsql_system.lua}/ : \nresp :>>\n"            ..t.res..   "\n\n<<  ")
+    -- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua}/ : \nresp :>>\n"            ..cjson.encode(resp)..   "\n\n<<  ")
     return resp.status,resp.body
 end
 
@@ -83,7 +83,7 @@ else
     qry_tbl = table.remove(uri_split,1)
 end
 
-
+-- FORMAT GET/POST ARGS
 local cols,cond = "",""
 if #uri_split==0 then cols = "*"
 elseif #uri_split==1 then 
@@ -100,14 +100,14 @@ else ngx.exit(ngx.HTTP_NOT_FOUND)
 end
 -- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n cond :>>\n"      ..cond..    "\n<< ")
 
-
+-- m=require('mobdebug').start("10.0.0.52")
 
 local t,post_args                 =   {},{}
 if req_method=='POST' then
     ngx.req.read_body()
     t = ngx.req.get_post_args()
     for k,v in pairs(t) do 
-        -- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n post_args(k) :>>\n"      ..k..    "\n<< ")
+        ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n post_args(k) :>>\n"      ..k..    "\n<< ")
         post_args = cjson.decode(k) 
         -- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n post_args :>>\n"      ..cjson.encode({type(post_args),post_args})..    "\n<< ")
         break 
@@ -117,6 +117,13 @@ if req_method=='POST' then
     for k,v in pairs(post_args) do arg_count = arg_count+1 end
     if arg_count==0 then ngx.exit(ngx.HTTP_METHOD_NOT_IMPLEMENTED) end
 end
+
+for k,v in pairs(post_args) do
+    if type(v)=="table" then
+        post_args[k] = cjson.encode(v)
+    end
+end
+
 
 --require('mobdebug').start("0.0.0.0")
 
@@ -151,23 +158,25 @@ if req_method=="GET" then
         _,q_res_body = make_query(qry)
         ngx.say(  os_capture([[echo ']]..q_res_body..[['  | jq -M -c '[.[].relname]' ]])  )
     else
-        qry = ngx.escape_uri( "SELECT "..cols.." FROM "..qry_tbl..cond..";" )
+        -- ngx.log(ngx.WARN,"-- {pgsql_system.lua}/ : \n\nREGULAR GET REQUEST\n\n")
+        qry = "SELECT "..cols.." FROM "..qry_tbl..cond..";"
+        -- qry = ngx.escape_uri( qry )
         _,q_res_body = make_query(qry)
         _,t = cols:gsub(",","")
         if t==0 then
-            ngx.say(  os_capture([[echo ']]..q_res_body..[['  | jq -M -c '[.[].]]..cols..[[]' ]])  )
+            local res = os_capture([[echo ']]..q_res_body..[['  | jq -M -c '[.[].]]..cols..[[]' 2>&1 ]])
+            if res:find("jq: error:")==1 then ngx.say(q_res_body) end
         else
             ngx.say(q_res_body)
         end
-    end
-    
+    end   
 elseif req_method=="POST" then
     qry = "UPDATE "..qry_tbl.." SET "
     for k,v in pairs(post_args) do
         qry = qry .. k .. [[=']] .. tostring(v) .. [[', ]]
     end
     qry = qry:sub(1,#qry-qry:reverse():find(',')) .. cond .. [[;]]
-    qry = ngx.escape_uri(qry)
+    -- qry = ngx.escape_uri(qry)
     _,q_res_body = make_query(qry)
     ngx.say(q_res_body)
 end

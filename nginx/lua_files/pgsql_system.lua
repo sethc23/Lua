@@ -18,7 +18,9 @@
     [X]  GET /sys/servers/tag/.scripts
 
 
-        "POST"     curl -s -X "POST" localhost:9999/sys/<...> | jq '.'
+        "POST"      echo '{"qry":"select distinct s_tag from servers"}' | curl --data @- --get localhost:9999/sys
+
+        OLD --> "POST"     curl -s -X "POST" localhost:9999/sys/<...> | jq '.'
 
     curl -H "Content-Type: application/json" -X POST -d \
         '{"test_text":"ok","test_bool":true}' http://localhost:9999/sys/servers
@@ -43,7 +45,7 @@ package.loaded.string_utils=nil
 cjson = require"cjson"
 str_u = require"string_utils"
 
---ngx.log(ngx.WARN,"-- {pgsql_system.lua}/ : START :>>  <<  ")
+-- ngx.log(ngx.WARN,"-- {pgsql_system.lua}/ : START :>>  <<  ")
 
 
 function os_capture(cmd, raw)
@@ -59,7 +61,11 @@ end
 
 function make_query(qry)
     -- ngx.log(ngx.WARN,"\n\n\n"..qry.."\n\n\n")
+    -- qry = ngx.decode(qry)unescape_uri
+    -- qry = ngx.escape_uri( qry )
+    qry = ngx.unescape_uri( qry )
     local plain_url = '/query?qry='..qry
+
     -- local enc_url = ngx.escape_uri(plain_url)
     local resp                  =   ngx.location.capture(plain_url)
     if resp.status~=200 then
@@ -158,7 +164,7 @@ if req_method=="GET" then
         _,q_res_body = make_query(qry)
         ngx.say(  os_capture([[echo ']]..q_res_body..[['  | jq -M -c '[.[].relname]' ]])  )
     else
-        -- ngx.log(ngx.WARN,"-- {pgsql_system.lua}/ : \n\nREGULAR GET REQUEST\n\n")
+        ngx.log(ngx.WARN,"-- {pgsql_system.lua}/ : \n\nREGULAR GET REQUEST\n\n")
         qry = "SELECT "..cols.." FROM "..qry_tbl..cond..";"
         -- qry = ngx.escape_uri( qry )
         _,q_res_body = make_query(qry)
@@ -171,6 +177,7 @@ if req_method=="GET" then
         end
     end   
 elseif req_method=="POST" then
+    ngx.log(ngx.WARN,"-- {pgsql_system.lua}/ : \n\nREGULAR POST REQUEST\n\n")
     qry = "UPDATE "..qry_tbl.." SET "
     for k,v in pairs(post_args) do
         qry = qry .. k .. [[=']] .. tostring(v) .. [[', ]]

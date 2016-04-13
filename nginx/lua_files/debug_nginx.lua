@@ -8,7 +8,7 @@
 
 -- ssh -nN -R 8172:localhost:8172 ub2 &
 
-m=require('mobdebug').start("10.0.0.53")
+m=require('mobdebug').start("10.0.0.52")
 u = {}
 n = ngx
 a="test"

@@ -43,38 +43,45 @@ TWO PRIMARY PROCESSES:
 local u = {}
 
 function u.send_data()
-    local LOG_TAG = "fs_websockets.send_file"
+    local fs_config = ngx.shared.fs_config
+    local LOG_TAG = "fs_websockets.send_data"
     local LOGGER_BASE = "logger -i --priority info --tag "..LOG_TAG.." -- "
     local ERROR_MSG = ""
-    os.execute(LOGGER_BASE.." STARTING")
-
-    --local pl = require'pl.import_into'()
-    --local tbl_u = require "tbl_utils"
-
-    --json currently sends close rather than code asking to close...
+    if fs_config:get("debug") then
+        os.execute(LOGGER_BASE.." STARTING")
+    end
 
     -- Load Data For Transmission
-    local cj = require "cjson"
-    local url_args = ngx.req.get_uri_args()        -- uuid,filename,filepath
+    local cj                                =   require "cjson"
+    local url_args                          =   ngx.req.get_uri_args()
+    
+    local _data                             =   nil
+    local service_endpt                     =   url_args.service_dest
+    local dest_ip                           =   url_args[service_endpt.."_ip"]
+    
+    if dest_ip then
+        _data                               =   url_args
+    else 
+        local f                             =   assert(io.open('/tmp/'..url_args.uuid,'r'))
+        local raw_data                      =   f:read("*a")
+        assert(f:close())
+        _data                               =   cj.decode(raw_data)
+        dest_ip                             =   _data[service_endpt.."_ip"]
+        for k,v in pairs(url_args) do
+            _data[k]                        =   v
+        end
+    end
 
-    -- local share_params = {"tbl","uid","uuid","filepath"}
-    -- for _,v in ipairs(share_params) do 
-    --     share_params[v] = url_args[v] 
-    -- end
+    local text_to_send_pre_transmission     =   cj.encode(_data)
+    local file_out_path                     =   _data.filepath
+    local text_to_send_post_transmission    =   _data.uuid
 
+    local uri                               =   "ws://"..dest_ip.."/receive"
+    if fs_config:get("debug") then os.execute(LOGGER_BASE.." URI: "..uri) end
 
-    local service_endpt = url_args["service_dest"]
-    local dest_ip = url_args[service_endpt.."_ip"]
+    -- local data_type                         = url_args["data_type"]:lower()
 
-    local uri = "ws://"..dest_ip.."/receive"
-    os.execute(LOGGER_BASE.." URI: "..uri)
-
-    local data_type                         = url_args["data_type"]:lower()
-    local text_to_send_pre_transmission     = cj.encode(url_args)
-    local data_to_send                      = {}
-    local tmp_fpath                         = url_args.filepath
-    local text_to_send_post_transmission    = url_args.uuid
-    local exit                              = true
+    -- local exit                              = true
         
     -- Start Websocket
     local client = require "resty.websocket.client"
@@ -92,12 +99,13 @@ function u.send_data()
         return
     end
     local data, typ, err = wb:recv_frame()
-    os.execute(LOGGER_BASE.." data: "..data)
     if not data then
         ERROR_MSG = "failed to receive 1st frame"
         ngx.say(ERROR_MSG..": ", err)
         os.execute(LOGGER_BASE.." WS: "..ERROR_MSG)
         return
+    else
+        if fs_config:get("debug") then os.execute(LOGGER_BASE.." WS: "..data) end
     end
 
     -- Send Instructions for Data
@@ -109,7 +117,7 @@ function u.send_data()
         return
     end
     data, typ, err = wb:recv_frame()
-    os.execute(LOGGER_BASE.." data: "..data)
+    if fs_config:get("debug") then os.execute(LOGGER_BASE.." WS: "..data) end
     if not data then
         ERROR_MSG = "failed to confirm initialization"
         ngx.say(ERROR_MSG..": ", err, " (",data, ")")
@@ -117,9 +125,9 @@ function u.send_data()
         return
     end
 
-    os.execute(LOGGER_BASE.." tmp_fpath: "..tmp_fpath)
+    if fs_config:get("debug") then os.execute(LOGGER_BASE.." file_out_path: "..file_out_path) end
     -- Send Data
-    local f = assert(io.open(tmp_fpath, "rb"))
+    local f = assert(io.open(file_out_path, "rb"))
     local block = 4096
     while true do
         local f_bytes = f:read(block)
@@ -134,7 +142,7 @@ function u.send_data()
         end
 
         data, typ, err = wb:recv_frame()
-        os.execute(LOGGER_BASE.." data: "..data)
+        if fs_config:get("debug") then os.execute(LOGGER_BASE.." WS: "..data) end
         if not data then
             ERROR_MSG = "failed to confirm byte block"
             ngx.say(ERROR_MSG..": ", err, " (",data, ")")
@@ -144,15 +152,9 @@ function u.send_data()
 
     end
 
-    -- Close Connection
     assert(f:close())
     
-    if data_type=="json" then
-        local bytes, err = wb:send_text(text_to_send_post_transmission)
-        -- local bytes, err = wb:send_close()
-    else
-        local bytes, err = wb:send_text(text_to_send_post_transmission)
-    end
+    local bytes, err = wb:send_text(text_to_send_post_transmission)
     if not bytes then
         ERROR_MSG = "failed to terminate transfer"
         ngx.say(ERROR_MSG..": ", err)
@@ -160,6 +162,7 @@ function u.send_data()
         return
     end
     data, typ, err = wb:recv_frame()
+    if fs_config:get("debug") then os.execute(LOGGER_BASE.." WS: "..data) end
     if not data then
         ERROR_MSG = "failed to confirm termination"
         ngx.say(ERROR_MSG..": ", err, " (",data, ")")
@@ -167,40 +170,21 @@ function u.send_data()
         return
     end
 
-    if exit then 
-        return ngx.exit(ngx.HTTP_OK)
-    elseif data_type=="json" then
-        return ngx.exit(ngx.HTTP_OK)
-    else
-        return url_args end
+    if fs_config:get("debug") then os.execute(LOGGER_BASE.." COMPLETE") end
+
+    return ngx.exit(ngx.HTTP_OK)
 end
 
 function u.receive_data()
+    local fs_config = ngx.shared.fs_config
     local LOG_TAG = "fs_websockets.receive_data"
     local LOGGER_BASE = "logger -i --priority info --tag "..LOG_TAG.." -- "
     local ERROR_MSG = ""
-    os.execute(LOGGER_BASE.." STARTING")
-
-    local cj            =   require "cjson"
-    local url_args      =   ngx.req.get_uri_args()
-    local h             =   ngx.req.raw_header()
-
-    os.execute(LOGGER_BASE.." HEADERS: "..cj.encode(h))
-    os.execute(LOGGER_BASE.." url_args: "..cj.encode(url_args))
-
-    local service_endpt =   url_args["service_dest"]
-    local save_path     =   ""
-
-    if service_endpt=="pgsql" then
-        exit            =   false
-        save_path       =   ""
-    elseif service_endpt=="es" then
-        exit            =   true
-        save_path       =   "/tmp"
-    elseif service_endpt=="pdf_ocr" then
-        exit            =   false
-        save_path       =   ""
+    if fs_config:get("debug") then
+        os.execute(LOGGER_BASE.." STARTING")
     end
+
+    -- MOST LIKELY GETTING INSTRUCTIONS FOR EVERYTHING... SO CONFIG DONE THEN
 
     -- Make Socket or Error:
     local server            = require "resty.websocket.server"
@@ -233,6 +217,7 @@ function u.receive_data()
         return ngx.exit(444)
     else
     -- Acknowledge Receipt or Error:
+        os.execute(LOGGER_BASE.." WS: "..data)
         bytes, err              = wb:send_text("START OK")
         if not bytes then
             ERROR_MSG = "failed to instructions confirmation"
@@ -242,126 +227,127 @@ function u.receive_data()
         end
     end
 
-    os.execute(LOGGER_BASE.." data: "..data)
-    local _data = cj.decode(data)
+    local cj            =   require "cjson"
+    local url_args      =   ngx.req.get_uri_args()
+    local h             =   ngx.req.raw_header()
 
-    os.execute(LOGGER_BASE.." data_type: "..data_type)
-    if _data.data_type=="file" then
+    local _data         =   cj.decode(data)
 
-        -- local file_in = io.open(_data.filepath, "ab+")
-        local file_in = assert(io.open(_data.filepath, "ab+"))
+    os.execute(LOGGER_BASE.." _data: "..cj.encode(_data))
+    os.execute(LOGGER_BASE.." HEADERS: "..cj.encode(h))
+    os.execute(LOGGER_BASE.." url_args: "..cj.encode(url_args))
+    
+    local service_dest  =   _data.service_dest
+    local save_path     =   _data.save_path
+    local filename      =   _data.filename
+    local filepath      =   _data.filepath
+    local EOF           =   _data.EOF
 
-        while true do
+    if not service_dest then
+        service_dest    =   url_args.service_dest
+    end
 
-            -- Receive Data or Error:
-            local data, typ, err    = wb:recv_frame()
+    if not save_path then
+        save_path       =   "/tmp"
+    end
 
-            os.execute(LOGGER_BASE.." data: "..data)
+    if filepath and not filename then 
+        filename        =   filepath:gsub("(.*)/([^/]+)$","%2")
+    end
 
-            if data==_data.uuid then break
-            elseif not data then
-                ERROR_MSG = "failed to receive next byte block"
-                ngx.say(ERROR_MSG..": ".. err)
-                os.execute(LOGGER_BASE.." WS: "..ERROR_MSG)
-                return ngx.exit(444)
-            else
-                file_in:write(data)    
-            end
+    if _data.uuid and not EOF then
+        EOF             =   _data.uuid
+    end
 
-            -- Acknowledge Receipt or Error:
-            bytes, err              = wb:send_text("PART OK")
-            if not bytes then
-                ERROR_MSG = "failed to send confirmation"
-                ngx.say(ERROR_MSG..": ".. err)
-                os.execute(LOGGER_BASE.." WS: "..ERROR_MSG)
-                return ngx.exit(444)
-            end
-        end
-        assert(file_in:flush())
-        assert(file_in:close())
-        -- Acknowledge Completion or Error:
-        bytes, err              = wb:send_text("END OK")
-        if not bytes then
-            ERROR_MSG = "failed to send the last confirmation"
+
+    if service_dest=="pdf_ocr" then
+        save_path       =   _data.pdf_ocr_inbox_dir 
+    elseif service_dest=="pgsql" then
+        save_path       =   _data.pgsql_attachments_dir
+    end
+
+
+    local file_in,file_in_path = nil,nil
+    if not filename then
+        file_in         =   io.tmpfile()
+    else
+        file_in_path    =   save_path.."/"..filename
+        file_in         =   assert(io.open(file_in_path, "wb"))
+    end
+
+    -- Receive & Confirm Data:
+    while true do
+
+        -- Receive Data or Error:
+        local data, typ, err    = wb:recv_frame()
+        
+        if data==EOF then
+            u.confirm_data_received(wb,LOGGER_BASE)
+            break
+        elseif not data then
+            ERROR_MSG = "failed to receive next byte block"
             ngx.say(ERROR_MSG..": ".. err)
             os.execute(LOGGER_BASE.." WS: "..ERROR_MSG)
             return ngx.exit(444)
-        end
-        return f
-
-    elseif _data.data_type=="json" then
-
-        -- Receive & Confirm Data:
-        local tmp_file = _data.filepath
-        local file_in = assert(io.open(tmp_file, "wb"))
-
-        while true do
-
-            function confirm_data_received()
-                -- Acknowledge Receipt or Error:
-                bytes, err              = wb:send_text("PART OK")
-                if not bytes then
-                    ERROR_MSG = "failed to send confirmation"
-                    ngx.say(ERROR_MSG..": ".. err)
-                    os.execute(LOGGER_BASE.." WS: "..ERROR_MSG)
-                    return ngx.exit(444)
-                end
-            end
-
-            -- Receive Data or Error:
-            local data, typ, err    = wb:recv_frame()
-            os.execute(LOGGER_BASE.." data: "..data)
-
-            if data==_data.uuid then
-                confirm_data_received()
-                break
-            elseif not data then
-                ERROR_MSG = "failed to receive next byte block"
-                ngx.say(ERROR_MSG..": ".. err)
-                os.execute(LOGGER_BASE.." WS: "..ERROR_MSG)
-                return ngx.exit(444)
-            else
-                file_in:write(data)
-                confirm_data_received()  
-            end
-
-        end
-        assert(file_in:flush())
-        assert(file_in:close())
-
-        if _data.service_dest:lower()=="es" then
-            
-            local f = io.open(tmp_file,'r')
-            local json = f:read("*a")
-            f:close()
-
-            os.execute(LOGGER_BASE.." tmp_file: "..tmp_file)
-            os.execute(LOGGER_BASE.." _json: "..json)
-
-            local res       =   {}
-            res[0]          =   _data
-            res[1]          =   tmp_file
-            res[2]          =   cj
-            res[3]          =   json
-
-            local es_wb = require "fs_elasticsearch"
-            es_wb.push_to_es(res)
-
+        else
+            -- os.execute(LOGGER_BASE.." WS: "..data)
+            file_in:write(data)
+            u.confirm_data_received(wb,LOGGER_BASE)
         end
 
-    else
-        ERROR_MSG = "UNKNOWN 'data_type'"
-        ngx.say(ERROR_MSG..": ".. err)
-        os.execute(LOGGER_BASE.." WS: "..ERROR_MSG)
-        return ngx.exit(444)
     end
+
+    assert(file_in:flush())
+    assert(file_in:close())
+
+    if service_dest=="es" then
+        os.execute(LOGGER_BASE.." CLOSING CONDITIONAL: "..service_dest)
+        
+        local f = io.open(file_in_path,'r')
+        local json = f:read("*a")
+        f:close()
+
+        os.execute(LOGGER_BASE.." file_in_path: "..file_in_path)
+        os.execute(LOGGER_BASE.." json: "..json)
+
+        local res       =   {}
+        res[0]          =   _data
+        res[1]          =   file_in_path
+        res[2]          =   cj
+        res[3]          =   json
+
+        local es_wb = require "fs_elasticsearch"
+        es_wb.push_to_es(res)
+
+    elseif service_dest=="pdf_ocr" then
+        os.execute(LOGGER_BASE.." CLOSING CONDITIONAL: "..service_dest)
+        os.execute("mv -f "..file_in_path.." "..file_in_path..".pdf")
+        local f = assert(io.open("/tmp/"..filename,'w'))
+        local json = f:write(cj.encode(_data))
+        assert(f:close())
+
+    elseif service_dest=="pgsql" then
+        os.execute(LOGGER_BASE.." CLOSING CONDITIONAL: "..service_dest)
+        local cmd = "/home/ub2/SERVER2/file_server/fs_ocr_to_pgsql"
+        cmd = cmd .. " " .. _data.uid
+        cmd = cmd .. " " .. _data.filename
+        cmd = cmd .. " " .. save_path
+        cmd = cmd .. " &"
+        os.execute(LOGGER_BASE.." CMD: "..cmd)
+        os.execute(cmd)
+    end
+
+    os.execute(LOGGER_BASE.." COMPLETE")
 end
 
 function u.check_query()
+    local fs_config = ngx.shared.fs_config
     local LOG_TAG = "fs_websockets.check_query"
     local LOGGER_BASE = "logger -i --priority info --tag "..LOG_TAG.." -- "
     local ERROR_MSG = ""
-    os.execute(LOGGER_BASE.." STARTING")
+    if fs_config:get("debug") then
+        os.execute(LOGGER_BASE.." STARTING")
+    end
     -- ngx.log(ngx.WARN,"\n\n\t\t>> {websockets_rewrite_by_lua} : STARTING >>\n\n"      .."STARTING"..    "\n\n<<")
     
     -- local raw_header = ngx.req.raw_header()
@@ -393,14 +379,19 @@ function u.check_query()
     end
     -- ngx.log(ngx.WARN,"\n\n\t\t>> {websockets_rewrite_by_lua} : qry >>\n\n"      ..tostring(qry)..    "\n\n<<")
     ngx.var.qry                             =   qry
+
+    os.execute(LOGGER_BASE.." QRY: "..qry)
 end
 
 
 function u.update_pgsql(res)
+    local fs_config = ngx.shared.fs_config
     local LOG_TAG = "fs_websockets.update_pgsql"
     local LOGGER_BASE = "logger -i --priority info --tag "..LOG_TAG.." -- "
     local ERROR_MSG = ""
-    os.execute(LOGGER_BASE.." STARTING")
+    if fs_config:get("debug") then
+        os.execute(LOGGER_BASE.." STARTING")
+    end
 
     os.execute(LOGGER_BASE.." res.uuid:sub(1,#res.uuid-4): "..res.uuid:sub(1,#res.uuid-4))
     
@@ -413,8 +404,8 @@ function u.update_pgsql(res)
 
     local resp                  =   ngx.location.capture(qry)
     if resp.status~=200 then
-        ngx.log(ngx.WARN,"-- {fs_websockets.lua}/ : pgsql_args :>>"      ..qry..                        "<<  ")
-        ngx.log(ngx.WARN,"-- {fs_websockets.lua}/ : resp :>>"            ..tostring(resp.status)..   "<<  ")
+        os.execute(LOGGER_BASE.." qry: "..cj.encode(qry))
+        os.execute(LOGGER_BASE.." qry: "..tostring(resp.status))
     end
     
     os.execute(LOGGER_BASE.." resp.status: "..resp.status)
@@ -423,10 +414,13 @@ function u.update_pgsql(res)
 end
 
 function u.queue_ocr_to_pgsql(file_idx_uid,res,base_dir,attachments_dir)
-    local LOG_TAG = "fs_websockets.send_file"
+    local fs_config = ngx.shared.fs_config
+    local LOG_TAG = "fs_websockets.queue_ocr_to_pgsql"
     local LOGGER_BASE = "logger -i --priority info --tag "..LOG_TAG.." -- "
     local ERROR_MSG = ""
-    os.execute(LOGGER_BASE.." STARTING")
+    if fs_config:get("debug") then
+        os.execute(LOGGER_BASE.." STARTING")
+    end
 
     os.execute(LOGGER_BASE.." file_idx_uid: "..file_idx_uid)
     os.execute(LOGGER_BASE.." res.uuid: "..res.uuid)
@@ -446,7 +440,271 @@ function u.queue_ocr_to_pgsql(file_idx_uid,res,base_dir,attachments_dir)
     local cmd = cmd.."2>&1 | logger -i --priority info --tag "..LOG_TAG.." &"
     
     os.execute(cmd)
-
 end
 
+function u.os_capture(cmd, raw)
+    local f = assert(io.popen(cmd, 'r'))
+    local s = assert(f:read('*a'))
+    f:close()
+    if raw then return s end
+    s = string.gsub(s, '^%s+', '')
+    s = string.gsub(s, '%s+$', '')
+    s = string.gsub(s, '[\n\r]+', ' ')
+    return s
+end
+function u.confirm_data_received()
+    -- Acknowledge Receipt or Error:
+    local bytes, err              = wb:send_text("PART OK")
+    if not bytes then
+        ERROR_MSG = "failed to send confirmation"
+        ngx.say(ERROR_MSG..": ".. err)
+        os.execute(LOGGER_BASE.." WS: "..ERROR_MSG)
+        return ngx.exit(444)
+    end
+end
+
+function u.set_config()
+    local fs_config = ngx.shared.fs_config
+    local LOG_TAG = "fs_websockets.set_config"
+    local LOGGER_BASE = "logger -i --priority info --tag "..LOG_TAG.." -- "
+    local ERROR_MSG = ""
+    if fs_config:get("debug") then
+        os.execute(LOGGER_BASE.." STARTING")
+    end
+
+    local cj                        =   require"cjson"
+    local qry                       =   "/query?qry=".."SELECT _json res FROM __config__"
+    local resp                      =   ngx.location.capture(qry)
+    local res                       =   {}
+    ngx.shared.fs_config:flush_all()
+    ngx.shared.fs_config:flush_expired()
+    local fs_config                 =   ngx.shared.fs_config
+
+    if resp.status~=200 then
+        os.execute(LOGGER_BASE.." qry: "..cj.encode(qry))
+        os.execute(LOGGER_BASE.." qry: "..tostring(resp.status))
+    else
+        
+        res                         =   cj.decode(resp.body)[1]
+        res                         =   cj.decode(res.res)
+
+        function parse_tbl (_tbl, _key, _tag)
+            if _key then
+                local _val          =   _tbl[_key]
+                if _tag then _key=_tag..":".._key end
+                if type(_val)=="table" then
+                    parse_tbl(_val,nil,_key)
+                else
+                    local t         =   {}
+                    t[_key]         =   _val
+                    coroutine.yield(t)
+                end
+            else
+                for _k,_v in pairs(_tbl) do
+                    if type(_v)=="table" then 
+                        parse_tbl (_tbl, _k, _tag)
+                    else
+                        if _tag then _k=_tag..":".._k end
+                        local t     =   {}
+                        t[_k]       =   _v
+                        coroutine.yield(t)
+                    end
+                end
+            end
+        end
+
+        function parse_iter (_tbl)
+            return coroutine.wrap(function () parse_tbl(_tbl) end)
+        end
+
+        for _var in parse_iter(res) do
+            for k,v in pairs(_var) do
+                local succ, err, forcible = fs_config:set(k,v)
+                if not succ or err then 
+                    os.execute(LOGGER_BASE.." ISSUE WITH SETTING SHARED DICT (fs_config)")
+                    os.execute(LOGGER_BASE.." k: "..cj.encode(k))
+                    os.execute(LOGGER_BASE.." v: "..cj.encode(v))
+                    os.execute(LOGGER_BASE.." succ: "..cj.encode(succ))
+                    os.execute(LOGGER_BASE.." err: "..cj.encode(err))
+                    os.execute(LOGGER_BASE.." forcible: "..cj.encode(forcible))
+                end
+            end
+        end
+
+    end 
+end
+function u.get_config()
+    local fs_config = ngx.shared.fs_config
+    local LOG_TAG = "fs_websockets.get_config"
+    local LOGGER_BASE = "logger -i --priority info --tag "..LOG_TAG.." -- "
+    local ERROR_MSG = ""
+    if fs_config:get("debug") then
+        os.execute(LOGGER_BASE.." STARTING")
+    end
+
+    local cj            =   require"cjson"
+    local fs_config     =   ngx.shared.fs_config
+    local t             =   {}
+    local _keys         =   fs_config:get_keys()
+
+    for i,v in ipairs(_keys) do
+        t[v]            =   fs_config:get(v)
+    end
+    ngx.say(cj.encode(t))
+end
+function u.send_config()
+    local fs_config = ngx.shared.fs_config
+    local LOG_TAG = "fs_websockets.send_config"
+    local LOGGER_BASE = "logger -i --priority info --tag "..LOG_TAG.." -- "
+    local ERROR_MSG = ""
+    if fs_config:get("debug") then
+        os.execute(LOGGER_BASE.." STARTING")
+    end
+
+
+    local cj = require"cjson"
+
+    -- local this_ip = u.os_capture("curl -s 'http://ipv4.nsupdate.info/myip'")
+    local this_ip = "65.96.175.247"
+    
+    local t = {}
+    local _keys = fs_config:get_keys()
+    if not _keys then 
+        set_config()
+        _keys = fs_config:get_keys()
+    end
+    local _servers = {}
+    local server_addr = ""
+    for i,k in ipairs(_keys) do
+        t[k] = fs_config:get(k)
+        if k:match("server_host") and t[k]~=this_ip then 
+            server_addr = k:gsub("server_host","server_port")
+            _servers[t[k]]=fs_config:get( server_addr )
+        end
+    end
+
+    local config_vars = cj.encode(t)
+
+    -- local other_servers = cj.encode(_servers)
+    -- os.execute(LOGGER_BASE.." config_vars: "..config_vars)
+    -- os.execute(LOGGER_BASE.." other_servers: "..other_servers)
+    fs_config:set("debug",true)
+
+    for k,v in pairs(_servers) do
+        server_addr = "ws://"..k..":"..v.."/receive_config"
+
+        os.execute(LOGGER_BASE.." server_addr: "..server_addr)
+
+        -- Start Websocket
+        local client = require "resty.websocket.client"
+        local wb, err = client:new{
+            timeout = 10000,                            -- in milliseconds
+            max_payload_len = 1048576,
+        }
+
+        -- Make Connect and Error Check:
+        local ok, err = wb:connect(server_addr)
+        if not ok then
+            ERROR_MSG = "failed to connect"
+            ngx.say(ERROR_MSG..": ".. err)
+            os.execute(LOGGER_BASE.." WS: "..ERROR_MSG)
+            return
+        end
+        local data, typ, err = wb:recv_frame()
+        if not data then
+            ERROR_MSG = "failed to receive 1st frame"
+            ngx.say(ERROR_MSG..": ", err)
+            os.execute(LOGGER_BASE.." WS: "..ERROR_MSG)
+            return
+        else
+            if fs_config:get("debug") then os.execute(LOGGER_BASE.." WS: "..data) end
+        end
+
+        local bytes, err = wb:send_binary(config_vars)
+        if not bytes then
+            ERROR_MSG = "failed to send byte block"
+            -- ngx.say(ERROR_MSG..": ", err)
+            os.execute(LOGGER_BASE.." WS: "..ERROR_MSG)
+            return
+        end
+
+        data, typ, err = wb:recv_frame()
+        if fs_config:get("debug") then os.execute(LOGGER_BASE.." WS: "..cj.encode(data)) end
+        if not data then
+            ERROR_MSG = "failed to confirm byte block"
+            -- ngx.say(ERROR_MSG..": ", err, " (",data, ")")
+            os.execute(LOGGER_BASE.." WS: "..ERROR_MSG)
+            return
+        end
+
+    end
+    
+end
+function u.receive_config()
+    local fs_config = ngx.shared.fs_config
+    local LOG_TAG = "fs_websockets.receive_config"
+    local LOGGER_BASE = "logger -i --priority info --tag "..LOG_TAG.." -- "
+    local ERROR_MSG = ""
+    if fs_config:get("debug") then
+        os.execute(LOGGER_BASE.." STARTING")
+    end
+
+    fs_config:set("debug",true)
+
+    -- Make Socket or Error:
+    local server            = require "resty.websocket.server"
+    local wb, err           = server:new{
+        timeout             = 10000,                        -- in milliseconds
+        max_payload_len     = 1048576,
+    }
+    if not wb then
+        ERROR_MSG = "failed to make new websocket"
+        ngx.say(ERROR_MSG..": ".. err)
+        os.execute(LOGGER_BASE.." WS: "..ERROR_MSG)
+        return ngx.exit(444)
+    end
+
+    -- Make Connection or Error:
+    local bytes, err        = wb:send_text("MESSAGE FROM USER ON WebSocket!")
+    if not bytes then
+        ERROR_MSG = "failed to send the 1st text"
+        ngx.say(ERROR_MSG..": ".. err)
+        os.execute(LOGGER_BASE.." WS: "..ERROR_MSG)
+        return ngx.exit(444)
+    end
+
+
+    -- Receive Data or Error:
+    local data, typ, err    = wb:recv_frame()
+    
+    if not data then
+        ERROR_MSG = "failed to receive next byte block"
+        ngx.say(ERROR_MSG..": ".. err)
+        os.execute(LOGGER_BASE.." WS: "..ERROR_MSG)
+        return ngx.exit(444)
+    else
+        os.execute(LOGGER_BASE.." WS: "..data)
+        u.confirm_data_received(wb,LOGGER_BASE)
+    end
+
+    local cj            =   require"cjson"
+    local config_vars   =   cj.decode(data)
+
+    for k,v in pairs(config_vars) do
+        local succ, err, forcible = fs_config:set(k,v)
+        if not succ or err then 
+            os.execute(LOGGER_BASE.." ISSUE WITH SETTING SHARED DICT (fs_config)")
+            os.execute(LOGGER_BASE.." k: "..cj.encode(k))
+            os.execute(LOGGER_BASE.." v: "..cj.encode(v))
+            os.execute(LOGGER_BASE.." succ: "..cj.encode(succ))
+            os.execute(LOGGER_BASE.." err: "..cj.encode(err))
+            os.execute(LOGGER_BASE.." forcible: "..cj.encode(forcible))
+        end
+    end
+
+    if fs_config:get("debug") then
+        os.execute(LOGGER_BASE.." COMPLETE")
+    end
+
+end
 return u

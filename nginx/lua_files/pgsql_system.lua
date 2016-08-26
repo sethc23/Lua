@@ -42,9 +42,16 @@
 -- lua_files/pgsql_system.lua
 module("pgsql_system", package.seeall)
 package.loaded.string_utils=nil
-cjson = require"cjson"
-str_u = require"string_utils"
+local cj = require"cjson"
+local str_u = require"string_utils"
 
+local DEBUG = false
+
+local LOG_TAG = "pgsql_system"
+local LOGGER_BASE = "logger -i --priority info --tag "..LOG_TAG.." -- "
+local ERROR_MSG = ""
+
+if DEBUG then os.execute(LOGGER_BASE.." STARTING") end
 -- ngx.log(ngx.WARN,"-- {pgsql_system.lua}/ : START :>>  <<  ")
 
 
@@ -60,19 +67,37 @@ function os_capture(cmd, raw)
 end
 
 function make_query(qry)
-    -- ngx.log(ngx.WARN,"\n\n\n"..qry.."\n\n\n")
-    -- qry = ngx.decode(qry)unescape_uri
+    -- qry = ngx.decode(qry)
     -- qry = ngx.escape_uri( qry )
-    qry = ngx.unescape_uri( qry )
-    local plain_url = '/query?qry='..qry
 
+    local URL = '/query'
+
+    qry = ngx.unescape_uri( qry )
+    local t = {}
+    t["qry"] = qry
+    if DEBUG then os.execute(LOGGER_BASE.." qry :"..cj.encode(t)) end
+
+    -- local plain_url             =   URL..'?qry='..qry
     -- local enc_url = ngx.escape_uri(plain_url)
-    local resp                  =   ngx.location.capture(plain_url)
+    
+    -- local capture_url           =   plain_url
+    -- if DEBUG then os.execute(LOGGER_BASE.." capture_url :"..capture_url) end
+    -- local resp                  =   ngx.location.capture(capture_url)
+    
+    local resp = ngx.location.capture(
+            URL,
+            { method    =   ngx.HTTP_GET,
+               -- args     =   {
+               --     qry           =   qry
+               -- },
+               body     =   cj.encode(t) }
+        )
+
     if resp.status~=200 then
-        ngx.log(ngx.WARN,"-- {pgsql_system.lua}/ : pgsql_args :>>"      ..qry..                        "<<  ")
-        ngx.log(ngx.WARN,"-- {pgsql_system.lua}/ : resp :>>"            ..tostring(resp.status)..   "<<  ")
+        if DEBUG then os.execute(LOGGER_BASE.." qry :"..qry) end
+        if DEBUG then os.execute(LOGGER_BASE.." resp :"..tostring(resp.status)) end
     end
-    -- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua}/ : \nresp :>>\n"            ..cjson.encode(resp)..   "\n\n<<  ")
+    if DEBUG then os.execute(LOGGER_BASE.." post_args :"..cj.encode(resp)) end
     return resp.status,resp.body
 end
 
@@ -81,7 +106,7 @@ if (not req_method=="GET" and not req_method=="POST") then ngx.exit(ngx.HTTP_MET
 
 local uri_split = str_u.splitter(ngx.var.uri,"/")
 table.remove(uri_split,1)
--- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n uri :>>\n"      ..tostring(ngx.var.uri)..    "\n<< ")
+if DEBUG then os.execute(LOGGER_BASE.." uri :"..ngx.var.uri) end
 
 if #uri_split==0 then 
     qry_tbl = nil
@@ -104,7 +129,7 @@ elseif #uri_split==2 then
     end
 else ngx.exit(ngx.HTTP_NOT_FOUND)
 end
--- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n cond :>>\n"      ..cond..    "\n<< ")
+if DEBUG then os.execute(LOGGER_BASE.." cond :"..cond) end
 
 -- m=require('mobdebug').start("10.0.0.52")
 
@@ -113,9 +138,9 @@ if req_method=='POST' then
     ngx.req.read_body()
     t = ngx.req.get_post_args()
     for k,v in pairs(t) do 
-        ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n post_args(k) :>>\n"      ..k..    "\n<< ")
-        post_args = cjson.decode(k) 
-        -- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n post_args :>>\n"      ..cjson.encode({type(post_args),post_args})..    "\n<< ")
+        if DEBUG then os.execute(LOGGER_BASE.." post_args(k) :"..k) end
+        post_args = cj.decode(k) 
+        if DEBUG then os.execute(LOGGER_BASE.." post_args :"..cj.encode(post_args)) end
         break 
     end
     
@@ -126,7 +151,7 @@ end
 
 for k,v in pairs(post_args) do
     if type(v)=="table" then
-        post_args[k] = cjson.encode(v)
+        post_args[k] = cj.encode(v)
     end
 end
 
@@ -135,7 +160,7 @@ end
 
 --[[
     local h                     =   ngx.req.raw_header()
-    ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \nheader :>>\n"      ..cjson.encode(h)..    "\n<< ")
+    ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \nheader :>>\n"      ..cj.encode(h)..    "\n<< ")
 --]]
 
 
@@ -145,7 +170,7 @@ end
     for k, v in pairs(args) do
         r[k]                  =   v
     end
-    ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \nuri_args :>>\n"    ..cjson.encode(r)..    "\n<< ")
+    ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \nuri_args :>>\n"    ..cj.encode(r)..    "\n<< ")
 --]]
 
 local qry,q_res_status,q_res_body = "","",""
@@ -164,9 +189,8 @@ if req_method=="GET" then
         _,q_res_body = make_query(qry)
         ngx.say(  os_capture([[echo ']]..q_res_body..[['  | jq -M -c '[.[].relname]' ]])  )
     else
-        ngx.log(ngx.WARN,"-- {pgsql_system.lua}/ : \n\nREGULAR GET REQUEST\n\n")
+        if DEBUG then os.execute(LOGGER_BASE.." REGULAR GET REQUEST") end
         qry = "SELECT "..cols.." FROM "..qry_tbl..cond..";"
-        -- qry = ngx.escape_uri( qry )
         _,q_res_body = make_query(qry)
         _,t = cols:gsub(",","")
         if t==0 then
@@ -176,19 +200,18 @@ if req_method=="GET" then
             ngx.say(q_res_body)
         end
     end   
-elseif req_method=="POST" then
-    ngx.log(ngx.WARN,"-- {pgsql_system.lua}/ : \n\nREGULAR POST REQUEST\n\n")
+elseif req_method=="POST" then    
+    if DEBUG then os.execute(LOGGER_BASE.." REGULAR POST REQUEST") end
     qry = "UPDATE "..qry_tbl.." SET "
     for k,v in pairs(post_args) do
         qry = qry .. k .. [[=']] .. tostring(v) .. [[', ]]
     end
     qry = qry:sub(1,#qry-qry:reverse():find(',')) .. cond .. [[;]]
-    -- qry = ngx.escape_uri(qry)
     _,q_res_body = make_query(qry)
     ngx.say(q_res_body)
 end
 
--- ngx.log(ngx.WARN,"-- \n{pgsql_system.lua} : \n\nEND\n\n :>>  <<  ")
+if DEBUG then os.execute(LOGGER_BASE.." END") end
 -- require('mobdebug').start("10.0.0.53")
 
 ngx.exit(ngx.OK)

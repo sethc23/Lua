@@ -1,5 +1,4 @@
 -- Following Websocket RFC: http://tools.ietf.org/html/rfc6455
-local struct = require'struct'
 local bit = require'websocket.bit'
 local band = bit.band
 local bxor = bit.bxor
@@ -9,13 +8,21 @@ local srep = string.rep
 local ssub = string.sub
 local sbyte = string.byte
 local schar = string.char
+local band = bit.band
+local rshift = bit.rshift
 local tinsert = table.insert
 local tconcat = table.concat
 local mmin = math.min
-local strpack = struct.pack
-local strunpack = struct.unpack
 local mfloor = math.floor
 local mrandom = math.random
+local unpack = unpack or table.unpack
+local tools = require'websocket.tools'
+local write_int8 = tools.write_int8
+local write_int16 = tools.write_int16
+local write_int32 = tools.write_int32
+local read_int8 = tools.read_int8
+local read_int16 = tools.read_int16
+local read_int32 = tools.read_int32
 
 local bits = function(...)
   local n = 0
@@ -29,27 +36,38 @@ local bit_7 = bits(7)
 local bit_0_3 = bits(0,1,2,3)
 local bit_0_6 = bits(0,1,2,3,4,5,6)
 
+-- TODO: improve performance
 local xor_mask = function(encoded,mask,payload)
-  local transformed_arr = {}
+  local transformed,transformed_arr = {},{}
   -- xor chunk-wise to prevent stack overflow.
   -- sbyte and schar multiple in/out values
   -- which require stack
   for p=1,payload,2000 do
-    local transformed = {}
     local last = mmin(p+1999,payload)
     local original = {sbyte(encoded,p,last)}
     for i=1,#original do
       local j = (i-1) % 4 + 1
-      transformed[i] = band(bxor(original[i],mask[j]), 0xFF)
+      transformed[i] = bxor(original[i],mask[j])
     end
-    local xored = schar(unpack(transformed))
+    local xored = schar(unpack(transformed,1,#original))
     tinsert(transformed_arr,xored)
   end
   return tconcat(transformed_arr)
 end
 
+local encode_header_small = function(header, payload)
+  return schar(header, payload)
+end
+
+local encode_header_medium = function(header, payload, len)
+  return schar(header, payload, band(rshift(len, 8), 0xFF), band(len, 0xFF))
+end
+
+local encode_header_big = function(header, payload, high, low)
+  return schar(header, payload)..write_int32(high)..write_int32(low)
+end
+
 local encode = function(data,opcode,masked,fin)
-  local encoded
   local header = opcode or 1-- TEXT is default opcode
   if fin == nil or fin == true then
     header = bor(header,bit_7)
@@ -59,41 +77,41 @@ local encode = function(data,opcode,masked,fin)
     payload = bor(payload,bit_7)
   end
   local len = #data
+  local chunks = {}
   if len < 126 then
     payload = bor(payload,len)
-    encoded = strpack('bb',header,payload)
-  elseif len < 0xffff then
+    tinsert(chunks,encode_header_small(header,payload))
+  elseif len <= 0xffff then
     payload = bor(payload,126)
-    encoded = strpack('bb>H',header,payload,len)
+    tinsert(chunks,encode_header_medium(header,payload,len))
   elseif len < 2^53 then
     local high = mfloor(len/2^32)
     local low = len - high*2^32
     payload = bor(payload,127)
-    encoded = strpack('bb>I>I',header,payload,high,low)
+    tinsert(chunks,encode_header_big(header,payload,high,low))
   end
   if not masked then
-    encoded = encoded..data
+    tinsert(chunks,data)
   else
     local m1 = mrandom(0,0xff)
     local m2 = mrandom(0,0xff)
     local m3 = mrandom(0,0xff)
     local m4 = mrandom(0,0xff)
     local mask = {m1,m2,m3,m4}
-    encoded = tconcat({
-        encoded,
-        strpack('bbbb',m1,m2,m3,m4),
-        xor_mask(data,mask,#data)
-    })
+    tinsert(chunks,write_int8(m1,m2,m3,m4))
+    tinsert(chunks,xor_mask(data,mask,#data))
   end
-  return encoded
+  return tconcat(chunks)
 end
 
 local decode = function(encoded)
   local encoded_bak = encoded
   if #encoded < 2 then
-    return nil,2
+    return nil,2-#encoded
   end
-  local header,payload,pos = struct.unpack('bb',encoded)
+  local pos,header,payload
+  pos,header = read_int8(encoded,1)
+  pos,payload = read_int8(encoded,pos)
   local high,low
   encoded = ssub(encoded,pos)
   local bytes = 2
@@ -104,14 +122,15 @@ local decode = function(encoded)
   if payload > 125 then
     if payload == 126 then
       if #encoded < 2 then
-        return nil,2
+        return nil,2-#encoded
       end
-      payload,pos = struct.unpack('>H',encoded)
+      pos,payload = read_int16(encoded,1)
     elseif payload == 127 then
       if #encoded < 8 then
-        return nil,8
+        return nil,8-#encoded
       end
-      high,low,pos = struct.unpack('>I>I',encoded)
+      pos,high = read_int32(encoded,1)
+      pos,low = read_int32(encoded,pos)
       payload = high*2^32 + low
       if payload < 0xffff or payload > 2^53 then
         assert(false,'INVALID PAYLOAD '..payload)
@@ -128,7 +147,11 @@ local decode = function(encoded)
     if bytes_short > 0 then
       return nil,bytes_short
     end
-    local m1,m2,m3,m4,pos = struct.unpack('bbbb',encoded)
+    local m1,m2,m3,m4
+    pos,m1 = read_int8(encoded,1)
+    pos,m2 = read_int8(encoded,pos)
+    pos,m3 = read_int8(encoded,pos)
+    pos,m4 = read_int8(encoded,pos)
     encoded = ssub(encoded,pos)
     local mask = {
       m1,m2,m3,m4
@@ -152,7 +175,7 @@ end
 
 local encode_close = function(code,reason)
   if code then
-    local data = struct.pack('>H',code)
+    local data = write_int16(code)
     if reason then
       data = data..tostring(reason)
     end
@@ -165,7 +188,7 @@ local decode_close = function(data)
   local _,code,reason
   if data then
     if #data > 1 then
-      code = struct.unpack('>H',data)
+      _,code = read_int16(data,1)
     end
     if #data > 2 then
       reason = data:sub(3)
@@ -179,6 +202,9 @@ return {
   decode = decode,
   encode_close = encode_close,
   decode_close = decode_close,
+  encode_header_small = encode_header_small,
+  encode_header_medium = encode_header_medium,
+  encode_header_big = encode_header_big,
   CONTINUATION = 0,
   TEXT = 1,
   BINARY = 2,

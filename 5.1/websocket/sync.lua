@@ -129,13 +129,19 @@ local connect = function(self,ws_url,ws_protocol)
   if err then
     return nil,err
   end
+  local ws_protocols_tbl = {''}
+  if type(ws_protocol) == 'string' then
+      ws_protocols_tbl = {ws_protocol}
+  elseif type(ws_protocol) == 'table' then
+      ws_protocols_tbl = ws_protocol
+  end
   local key = tools.generate_key()
   local req = handshake.upgrade_request
   {
     key = key,
     host = host,
     port = port,
-    protocols = {ws_protocol or ''},
+    protocols = ws_protocols_tbl,
     uri = uri
   }
   local n,err = self:sock_send(req)
@@ -165,10 +171,26 @@ local extend = function(obj)
   assert(obj.sock_send)
   assert(obj.sock_receive)
   assert(obj.sock_close)
+
+  assert(obj.is_closing == nil)
+  assert(obj.receive    == nil)
+  assert(obj.send       == nil)
+  assert(obj.close      == nil)
+  assert(obj.connect    == nil)
+
+  if not obj.is_server then
+    assert(obj.sock_connect)
+  end
+
+  if not obj.state then
+    obj.state = 'CLOSED'
+  end
+
   obj.receive = receive
   obj.send = send
   obj.close = close
   obj.connect = connect
+
   return obj
 end
 

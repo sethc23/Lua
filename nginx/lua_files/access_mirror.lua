@@ -6,7 +6,7 @@ ngx.log(ngx.WARN,"#>>> {access_mirror.lua}: START <<<#")
 
 ngx.say("{")
 
-local cjson                 =   require "cjson"
+local cj                    =   require "cjson"
 
 local r                     =   {}
 local h                     =   ngx.req.get_headers()
@@ -15,8 +15,12 @@ for k, v in pairs(h) do
     ngx.say("\""..k.."\":\""..v.."\",")
     -- r[k]                  =   v
 end
+
+os.execute("echo '"..cj.encode(h).."' > /tmp/lua_access")
+os.execute("echo '"..cj.encode(ngx.var).."' >> /tmp/lua_access")
+
 ngx.say("\"request_method\":\""..ngx.req.get_method().."\",")
--- ngx.log(ngx.WARN,"-- \n{aporo_ngx.lua} : \nheader :>>\n"      ..cjson.encode(ngx.req.raw_header())..    "\n<< ")
+-- ngx.log(ngx.WARN,"-- \n{aporo_ngx.lua} : \nheader :>>\n"      ..cj.encode(ngx.req.raw_header())..    "\n<< ")
 
 local r_vars                =                  {ngx.var.args,
                                                 ngx.var.binary_remote_addr,
@@ -164,21 +168,24 @@ local r_names               =                  {"args",
 ngx.log(ngx.WARN,"#>>> ".."TEST PAIRS:  "..#r_vars.."==?=="..#r_names.." <<<#")
 -- ngx.log(ngx.WARN,"#>>> ".."TEST".." <<<#")
 
-for i=1,#r_vars do
-    if r_vars[i] then ngx.say("\""..r_names[i].."\":\""..r_vars[i]:gsub("\n","").."\",") end
+-- for i=1,#r_vars do
+--     if r_vars[i] then ngx.say("\""..r_names[i].."\":\""..r_vars[i]:gsub("\n","").."\",") end
     -- if r_vars[i] then ngx.log(ngx.WARN,"#>>> "..r_names[i].." : "..r_vars[i]:gsub("\n","").." <<<#") end
-end
+-- end
 
 
 
--- local uri_args                  =   ngx.req.get_uri_args()
---ngx.log(ngx.WARN,"#>>> {aporo_ngx.lua}:uri_args "    ..cjson.encode({type(uri_args),uri_args})..    "<<<#")
+local uri_args                  =   ngx.req.get_uri_args()
+os.execute("echo '"..cj.encode(uri_args).."' >> /tmp/lua_access")
+
+--ngx.log(ngx.WARN,"#>>> {aporo_ngx.lua}:uri_args "    ..cj.encode({type(uri_args),uri_args})..    "<<<#")
 
 -- local post_args                 =   {}
 -- if ngx.var.request_method=='POST' then
 --     ngx.req.read_body()
 --     post_args                   =   ngx.req.get_post_args()
---    ngx.log(ngx.WARN,"#>>> {aporo_ngx.lua}:post_args "    ..cjson.encode({type(post_args),post_args})..    "<<<#")
+--     os.execute("echo '"..cj.encode(post_args).."' >> /tmp/lua_access")
+--     -- ngx.log(ngx.WARN,"#>>> {aporo_ngx.lua}:post_args "    ..cj.encode({type(post_args),post_args})..    "<<<#")
 -- end
 
 
@@ -194,7 +201,9 @@ end
 -- ngx.say(",\"binary_remote_addr\":\""..ngx.var.binary_remote_addr.."\"")
 ngx.say("}")
 
-ngx.exit(ngx.OK)
+
+
+-- ngx.exit(ngx.OK)
 
 
 

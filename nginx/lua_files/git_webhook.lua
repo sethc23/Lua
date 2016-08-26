@@ -16,7 +16,8 @@ end
 ngx.req.read_body()
 local post_args = ngx.req.get_body_data()
 
--- os.execute("echo '"..post_args.."' > /tmp/lua")
+local cj=require"cjson"
+os.execute("echo '"..cj.encode(post_args).."' > /tmp/lua")
 -- m=require('mobdebug').start("10.0.0.53")
 
 local json = [[{"commit":.after,"ref":.ref,"ssh_url":.repository.ssh_url,"https_url":.repository.clone_url}]]

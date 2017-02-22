@@ -6,7 +6,8 @@ do
   local _obj_0 = require("bit")
   rshift, lshift, band = _obj_0.rshift, _obj_0.lshift, _obj_0.band
 end
-local VERSION = "1.4.0"
+local unpack = table.unpack or unpack
+local VERSION = "1.8.0"
 local _len
 _len = function(thing, t)
   if t == nil then
@@ -68,6 +69,7 @@ local MSG_TYPE = flipped({
   ready_for_query = "Z",
   query = "Q",
   notice = "N",
+  notification = "A",
   password = "p",
   row_description = "T",
   data_row = "D",
@@ -79,7 +81,10 @@ local ERROR_TYPES = flipped({
   code = "C",
   message = "M",
   position = "P",
-  detail = "D"
+  detail = "D",
+  schema = "s",
+  table = "t",
+  constraint = "n"
 })
 local PG_TYPES = {
   [16] = "boolean",
@@ -90,6 +95,8 @@ local PG_TYPES = {
   [700] = "number",
   [701] = "number",
   [1700] = "number",
+  [114] = "json",
+  [3802] = "json",
   [1000] = "array_boolean",
   [1005] = "array_number",
   [1007] = "array_number",
@@ -101,8 +108,9 @@ local PG_TYPES = {
   [1015] = "array_string",
   [1002] = "array_string",
   [1014] = "array_string",
-  [114] = "json",
-  [3802] = "json"
+  [2951] = "array_string",
+  [199] = "array_json",
+  [3807] = "array_json"
 }
 local NULL = "\0"
 local tobool
@@ -117,9 +125,11 @@ do
     NULL = {
       "NULL"
     },
+    PG_TYPES = PG_TYPES,
     user = "postgres",
     host = "127.0.0.1",
     port = "5432",
+    ssl = false,
     type_deserializers = {
       json = function(self, val, name)
         local decode_json
@@ -143,15 +153,56 @@ do
         local decode_array
         decode_array = require("pgmoon.arrays").decode_array
         return decode_array(val)
+      end,
+      array_json = function(self, val, name)
+        local decode_array
+        decode_array = require("pgmoon.arrays").decode_array
+        local decode_json
+        decode_json = require("pgmoon.json").decode_json
+        return decode_array(val, decode_json)
+      end,
+      hstore = function(self, val, name)
+        local decode_hstore
+        decode_hstore = require("pgmoon.hstore").decode_hstore
+        return decode_hstore(val)
       end
     },
+    set_type_oid = function(self, oid, name)
+      if not (rawget(self, "PG_TYPES")) then
+        do
+          local _tbl_0 = { }
+          for k, v in pairs(self.PG_TYPES) do
+            _tbl_0[k] = v
+          end
+          self.PG_TYPES = _tbl_0
+        end
+      end
+      self.PG_TYPES[assert(tonumber(oid))] = name
+    end,
+    setup_hstore = function(self)
+      local res = unpack(self:query("SELECT oid FROM pg_type WHERE typname = 'hstore'"))
+      assert(res, "hstore oid not found")
+      return self:set_type_oid(tonumber(res.oid), "hstore")
+    end,
     connect = function(self)
-      self.sock = socket.new()
-      local ok, err = self.sock:connect(self.host, self.port)
+      local opts
+      if self.sock_type == "nginx" then
+        opts = {
+          pool = self.pool_name or tostring(self.host) .. ":" .. tostring(self.port) .. ":" .. tostring(self.database)
+        }
+      end
+      local ok, err = self.sock:connect(self.host, self.port, opts)
       if not (ok) then
         return nil, err
       end
       if self.sock:getreusedtimes() == 0 then
+        if self.ssl then
+          local success
+          success, err = self:send_ssl_message()
+          if not (success) then
+            return nil, err
+          end
+        end
         local success
         success, err = self:send_startup_message()
         if not (success) then
@@ -167,6 +218,9 @@ do
         end
       end
       return true
+    end,
+    settimeout = function(self, ...)
+      return self.sock:settimeout(...)
     end,
     disconnect = function(self)
       local sock = self.sock
@@ -237,12 +291,9 @@ do
       end
     end,
     query = function(self, q)
-      self:send_message(MSG_TYPE.query, {
-        q,
-        NULL
-      })
+      self:post(q)
       local row_desc, data_rows, command_complete, err_msg
-      local result
+      local result, notifications
       local num_queries = 0
       while true do
         local t, msg = self:receive_message()
@@ -274,12 +325,35 @@ do
           row_desc, data_rows, command_complete = nil
         elseif MSG_TYPE.ready_for_query == _exp_0 then
           break
+        elseif MSG_TYPE.notification == _exp_0 then
+          if not (notifications) then
+            notifications = { }
+          end
+          insert(notifications, self:parse_notification(msg))
         end
       end
       if err_msg then
-        return nil, self:parse_error(err_msg), result, num_queries
+        return nil, self:parse_error(err_msg), result, num_queries, notifications
       end
-      return result, num_queries
+      return result, num_queries, notifications
+    end,
+    post = function(self, q)
+      return self:send_message(MSG_TYPE.query, {
+        q,
+        NULL
+      })
+    end,
+    wait_for_notification = function(self)
+      while true do
+        local t, msg = self:receive_message()
+        if not (t) then
+          return nil, msg
+        end
+        local _exp_0 = t
+        if MSG_TYPE.notification == _exp_0 then
+          return self:parse_notification(msg)
+        end
+      end
     end,
     format_query_result = function(self, row_desc, data_rows, command_complete)
       local command, affected_rows
@@ -311,6 +385,7 @@ do
     end,
     parse_error = function(self, err_msg)
       local severity, message, detail, position
+      local error_data = { }
       local offset = 1
       while offset <= #err_msg do
         local t = err_msg:sub(offset, offset)
@@ -319,6 +394,12 @@ do
           break
         end
         offset = offset + (2 + #str)
+        do
+          local field = ERROR_TYPES[t]
+          if field then
+            error_data[field] = str
+          end
+        end
         local _exp_0 = t
         if ERROR_TYPES.severity == _exp_0 then
           severity = str
@@ -337,7 +418,7 @@ do
       if detail then
         msg = tostring(msg) .. "\n" .. tostring(detail)
       end
-      return msg
+      return msg, error_data
     end,
     parse_row_desc = function(self, row_desc)
       local num_fields = self:decode_int(row_desc:sub(1, 2))
@@ -350,7 +431,7 @@ do
           local name = row_desc:match("[^%z]+", offset)
           offset = offset + #name + 1
           local data_type = self:decode_int(row_desc:sub(offset + 6, offset + 6 + 3))
-          data_type = PG_TYPES[data_type] or "string"
+          data_type = self.PG_TYPES[data_type] or "string"
           local format = self:decode_int(row_desc:sub(offset + 16, offset + 16 + 1))
           assert(0 == format, "don't know how to handle format")
           offset = offset + 18
@@ -414,6 +495,20 @@ do
       end
       return out
     end,
+    parse_notification = function(self, msg)
+      local pid = self:decode_int(msg:sub(1, 4))
+      local offset = 4
+      local channel, payload = msg:match("^([^%z]+)%z([^%z]*)%z$", offset + 1)
+      if not (channel) then
+        error("parse_notification: failed to parse notification")
+      end
+      return {
+        operation = "notification",
+        pid = pid,
+        channel = channel,
+        payload = payload
+      }
+    end,
     wait_until_ready = function(self)
       while true do
         local t, msg = self:receive_message()
@@ -466,6 +561,32 @@ do
         self:encode_int(_len(data) + 4),
         data
       })
+    end,
+    send_ssl_message = function(self)
+      local success, err = self.sock:send({
+        self:encode_int(8),
+        self:encode_int(80877103)
+      })
+      if not (success) then
+        return nil, err
+      end
+      local t
+      t, err = self.sock:receive(1)
+      if not (t) then
+        return nil, err
+      end
+      if t == MSG_TYPE.status then
+        if self.sock_type == "nginx" then
+          return self.sock:sslhandshake(false, nil, self.ssl_verify)
+        else
+          return self.sock:sslhandshake(self.ssl_verify, self.luasec_opts)
+        end
+      elseif t == MSG_TYPE.error or self.ssl_required then
+        self:disconnect()
+        return nil, "the server does not support SSL connections"
+      else
+        return true
+      end
     end,
     send_message = function(self, t, data, len)
       if len == nil then
@@ -548,12 +669,22 @@ do
   _base_0.__index = _base_0
   _class_0 = setmetatable({
     __init = function(self, opts)
+      self.sock, self.sock_type = socket.new(opts and opts.socket_type)
       if opts then
         self.user = opts.user
         self.host = opts.host
         self.database = opts.database
         self.port = opts.port
         self.password = opts.password
+        self.ssl = opts.ssl
+        self.ssl_verify = opts.ssl_verify
+        self.ssl_required = opts.ssl_required
+        self.pool_name = opts.pool
+        self.luasec_opts = {
+          key = opts.key,
+          cert = opts.cert,
+          cafile = opts.cafile
+        }
       end
     end,
     __base = _base_0,

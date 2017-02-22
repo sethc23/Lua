@@ -9,32 +9,32 @@ module("fs_websockets", package.seeall)
 --require('mobdebug').start("10.0.1.1")
 --[[
 
-psql_server (PSQ)
-file_server (FS)
+    psql_server (PSQ)
+    file_server (FS)
 
-- PSQ receives gmail update
-1. [fs_update_es (gmail) ]                    - PSQ sends json from gmail contents  [ for elasticsearch ? ] 
-2. [fs_update_file_idx_on_gmail_update]
-(1.) [fs_update_es (file_idx) ]                 - PSQ sends json from file_idx._info  [ for pypdfOCR ? ]
-3. [fs_process_files_in_file_idx ( 1st )]  - PSQ sends file from file_idx
-... some info updated
--..- PSQ sends json from file_idx._info  [ for pypdfOCR ? ] -- AFTER LAST-UPDATED COLUMN UPDATE
-- FS sends OCRed file
-- PSQ updates pgsql
+    - PSQ receives gmail update
+    1. [fs_update_es (gmail) ]                    - PSQ sends json from gmail contents  [ for elasticsearch ? ] 
+    2. [fs_update_file_idx_on_gmail_update]
+    (1.) [fs_update_es (file_idx) ]                 - PSQ sends json from file_idx._info  [ for pypdfOCR ? ]
+    3. [fs_process_files_in_file_idx ( 1st )]  - PSQ sends file from file_idx
+    ... some info updated
+    -..- PSQ sends json from file_idx._info  [ for pypdfOCR ? ] -- AFTER LAST-UPDATED COLUMN UPDATE
+    - FS sends OCRed file
+    - PSQ updates pgsql
 
 
-TWO PRIMARY PROCESSES:
+    TWO PRIMARY PROCESSES:
 
-    1. receiving email, attachments are inspected, and 
-        as much data extracted as possible, 
-        which includes OCR
-            --> ORIGINAL/OCR files communicated b/t PSQ/FS
+        1. receiving email, attachments are inspected, and 
+            as much data extracted as possible, 
+            which includes OCR
+                --> ORIGINAL/OCR files communicated b/t PSQ/FS
 
-    2. database storing gmail emails and extracted content
-        needs to be accessible and easily searchable
-            --> JSON packets sent from PSQ to SE,
-                    which is content indexing tool (elasticsearch)
-                    coupled with a web search interface (Kibana)
+        2. database storing gmail emails and extracted content
+            needs to be accessible and easily searchable
+                --> JSON packets sent from PSQ to SE,
+                        which is content indexing tool (elasticsearch)
+                        coupled with a web search interface (Kibana)
 
 
 
@@ -452,7 +452,7 @@ function u.os_capture(cmd, raw)
     s = string.gsub(s, '[\n\r]+', ' ')
     return s
 end
-function u.confirm_data_received()
+function u.confirm_data_received(wb,LOGGER_BASE)
     -- Acknowledge Receipt or Error:
     local bytes, err              = wb:send_text("PART OK")
     if not bytes then

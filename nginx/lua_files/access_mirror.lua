@@ -138,8 +138,8 @@ local r_names               =                  {"args",
                                                 "server_protocol",
                                                 "status",
                                                 "tcpinfo_rtt",
-                                                "tcpinfo_rttvar", 
-                                                "tcpinfo_snd_cwnd", 
+                                                "tcpinfo_rttvar",
+                                                "tcpinfo_snd_cwnd",
                                                 "tcpinfo_rcv_space",
                                                 "time_iso8601",
                                                 "time_local",
@@ -166,7 +166,7 @@ local r_names               =                  {"args",
                                                 "ssl_session_id",
                                                 "ssl_session_reused"}
 ngx.log(ngx.WARN,"#>>> ".."TEST PAIRS:  "..#r_vars.."==?=="..#r_names.." <<<#")
--- ngx.log(ngx.WARN,"#>>> ".."TEST".." <<<#")
+-- ngx.log(ngx.WARN,"#>>> "..type(ngx.var).." <<<#")
 
 -- for i=1,#r_vars do
 --     if r_vars[i] then ngx.say("\""..r_names[i].."\":\""..r_vars[i]:gsub("\n","").."\",") end

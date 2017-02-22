@@ -1,5 +1,5 @@
 local inspect ={
-  _VERSION = 'inspect.lua 3.0.3',
+  _VERSION = 'inspect.lua 3.1.0',
   _URL     = 'http://github.com/kikito/inspect.lua',
   _DESCRIPTION = 'human-readable representations of tables',
   _LICENSE = [[
@@ -28,6 +28,8 @@ local inspect ={
   ]]
 }
 
+local tostring = tostring
+
 inspect.KEY       = setmetatable({}, {__tostring = function() return 'inspect.KEY' end})
 inspect.METATABLE = setmetatable({}, {__tostring = function() return 'inspect.METATABLE' end})
 
@@ -40,14 +42,24 @@ local function smartQuote(str)
   return '"' .. str:gsub('"', '\\"') .. '"'
 end
 
-local controlCharsTranslation = {
-  ["\a"] = "\\a",  ["\b"] = "\\b", ["\f"] = "\\f",  ["\n"] = "\\n",
+-- \a => '\\a', \0 => '\\0', 31 => '\31'
+local shortControlCharEscapes = {
+  ["\a"] = "\\a",  ["\b"] = "\\b", ["\f"] = "\\f", ["\n"] = "\\n",
   ["\r"] = "\\r",  ["\t"] = "\\t", ["\v"] = "\\v"
 }
+local longControlCharEscapes = {} -- \a => nil, \0 => \000, 31 => \031
+for i=0, 31 do
+  local ch = string.char(i)
+  if not shortControlCharEscapes[ch] then
+    shortControlCharEscapes[ch] = "\\"..i
+    longControlCharEscapes[ch]  = string.format("\\%03d", i)
+  end
+end
 
 local function escape(str)
-  local result = str:gsub("\\", "\\\\"):gsub("(%c)", controlCharsTranslation)
-  return result
+  return (str:gsub("\\", "\\\\")
+             :gsub("(%c)%f[0-9]", longControlCharEscapes)
+             :gsub("%c", shortControlCharEscapes))
 end
 
 local function isIdentifier(str)
@@ -115,21 +127,6 @@ local function getToStringResultSafely(t, mt)
   if type(str) == 'string' and #str > 0 then return str end
 end
 
-local maxIdsMetaTable = {
-  __index = function(self, typeName)
-    rawset(self, typeName, 0)
-    return 0
-  end
-}
-
-local idsMetaTable = {
-  __index = function (self, typeName)
-    local col = {}
-    rawset(self, typeName, col)
-    return col
-  end
-}
-
 local function countTableAppearances(t, tableAppearances)
   tableAppearances = tableAppearances or {}
 
@@ -164,27 +161,31 @@ local function makePath(path, ...)
   return newPath
 end
 
-local function processRecursive(process, item, path)
-  if item == nil then return nil end
+local function processRecursive(process, item, path, visited)
 
-  local processed = process(item, path)
-  if type(processed) == 'table' then
-    local processedCopy = {}
-    local processedKey
+    if item == nil then return nil end
+    if visited[item] then return visited[item] end
 
-    for k,v in pairs(processed) do
-      processedKey = processRecursive(process, k, makePath(path, k, inspect.KEY))
-      if processedKey ~= nil then
-        processedCopy[processedKey] = processRecursive(process, v, makePath(path, processedKey))
+    local processed = process(item, path)
+    if type(processed) == 'table' then
+      local processedCopy = {}
+      visited[item] = processedCopy
+      local processedKey
+
+      for k,v in pairs(processed) do
+        processedKey = processRecursive(process, k, makePath(path, k, inspect.KEY), visited)
+        if processedKey ~= nil then
+          processedCopy[processedKey] = processRecursive(process, v, makePath(path, processedKey), visited)
+        end
       end
-    end
 
-    local mt  = processRecursive(process, getmetatable(processed), makePath(path, inspect.METATABLE))
-    setmetatable(processedCopy, mt)
-    processed = processedCopy
-  end
-  return processed
+      local mt  = processRecursive(process, getmetatable(processed), makePath(path, inspect.METATABLE), visited)
+      setmetatable(processedCopy, mt)
+      processed = processedCopy
+    end
+    return processed
 end
+
 
 
 -------------------------------------------------------------------
@@ -198,7 +199,7 @@ function Inspector:puts(...)
   local len    = #buffer
   for i=1, #args do
     len = len + 1
-    buffer[len] = tostring(args[i])
+    buffer[len] = args[i]
   end
 end
 
@@ -213,18 +214,18 @@ function Inspector:tabify()
 end
 
 function Inspector:alreadyVisited(v)
-  return self.ids[type(v)][v] ~= nil
+  return self.ids[v] ~= nil
 end
 
 function Inspector:getId(v)
-  local tv = type(v)
-  local id = self.ids[tv][v]
+  local id = self.ids[v]
   if not id then
-    id              = self.maxIds[tv] + 1
+    local tv = type(v)
+    id              = (self.maxIds[tv] or 0) + 1
     self.maxIds[tv] = id
-    self.ids[tv][v] = id
+    self.ids[v]     = id
   end
-  return id
+  return tostring(id)
 end
 
 function Inspector:putKey(k)
@@ -315,15 +316,15 @@ function inspect.inspect(root, options)
   local process = options.process
 
   if process then
-    root = processRecursive(process, root, {})
+    root = processRecursive(process, root, {}, {})
   end
 
   local inspector = setmetatable({
     depth            = depth,
-    buffer           = {},
     level            = 0,
-    ids              = setmetatable({}, idsMetaTable),
-    maxIds           = setmetatable({}, maxIdsMetaTable),
+    buffer           = {},
+    ids              = {},
+    maxIds           = {},
     newline          = newline,
     indent           = indent,
     tableAppearances = countTableAppearances(root)
